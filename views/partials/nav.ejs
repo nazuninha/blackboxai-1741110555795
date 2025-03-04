@@ -1,0 +1,113 @@
+<!-- Top Navigation -->
+<nav class="bg-white dark:bg-gray-800 shadow-sm" x-data="{ mobileMenuOpen: false }">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <!-- Left side -->
+            <div class="flex">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center">
+                    <i class="fas fa-robot text-2xl text-green-600 dark:text-green-400"></i>
+                    <span class="ml-2 text-lg font-semibold text-gray-900 dark:text-white">WhatsApp Bot</span>
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                    <a href="/dashboard" 
+                       class="<%= path === '/dashboard' ? 'border-green-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        Dashboard
+                    </a>
+                    <a href="/numbers" 
+                       class="<%= path === '/numbers' ? 'border-green-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <i class="fas fa-phone mr-2"></i>
+                        Numbers
+                    </a>
+                    <a href="/settings" 
+                       class="<%= path === '/settings' ? 'border-green-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <i class="fas fa-cog mr-2"></i>
+                        Settings
+                    </a>
+                </div>
+            </div>
+
+            <!-- Right side -->
+            <div class="flex items-center">
+                <!-- Dark Mode Toggle -->
+                <button 
+                    @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+                    class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    aria-label="Toggle dark mode"
+                >
+                    <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                </button>
+
+                <!-- Profile Dropdown -->
+                <div class="ml-3 relative" x-data="{ open: false }">
+                    <div>
+                        <button 
+                            @click="open = !open" 
+                            class="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        >
+                            <img 
+                                class="h-8 w-8 rounded-full"
+                                src="<%= user?.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user?.name || 'User') %>"
+                                alt="<%= user?.name || 'User' %>"
+                            >
+                        </button>
+                    </div>
+                    <div 
+                        x-show="open"
+                        @click.away="open = false"
+                        class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700"
+                    >
+                        <div class="py-1">
+                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <i class="fas fa-user mr-2"></i>
+                                Profile
+                            </a>
+                        </div>
+                        <div class="py-1">
+                            <form action="/logout" method="POST">
+                                <button type="submit" class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>
+                                    Logout
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu button -->
+            <div class="flex items-center sm:hidden">
+                <button 
+                    @click="mobileMenuOpen = !mobileMenuOpen"
+                    class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500"
+                >
+                    <i class="fas" :class="mobileMenuOpen ? 'fa-times' : 'fa-bars'"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile menu -->
+    <div class="sm:hidden" x-show="mobileMenuOpen" @click.away="mobileMenuOpen = false">
+        <div class="pt-2 pb-3 space-y-1">
+            <a href="/dashboard" 
+               class="<%= path === '/dashboard' ? 'bg-green-50 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-300' : 'border-transparent text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700' %> block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                <i class="fas fa-chart-line mr-2"></i>
+                Dashboard
+            </a>
+            <a href="/numbers" 
+               class="<%= path === '/numbers' ? 'bg-green-50 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-300' : 'border-transparent text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700' %> block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                <i class="fas fa-phone mr-2"></i>
+                Numbers
+            </a>
+            <a href="/settings" 
+               class="<%= path === '/settings' ? 'bg-green-50 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-300' : 'border-transparent text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700' %> block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                <i class="fas fa-cog mr-2"></i>
+                Settings
+            </a>
+        </div>
+    </div>
+</nav>
