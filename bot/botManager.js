@@ -1,5 +1,4 @@
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const path = require('path');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const config = require('../config/config');
 const logger = require('../utils/logger');
@@ -13,25 +12,25 @@ class BotManager {
     }
 
     /**
-     * Initialize the bot manager
+     * Initialize bot manager
      */
     async init() {
         try {
             // Load settings
             const data = await Database.read(config.paths.settings);
-            if (data.settings) {
-                this.settings = { ...this.settings, ...data.settings };
-            }
+            this.settings = { ...config.botDefaults, ...data.settings };
 
-            // Load existing numbers and try to reconnect
+            // Load existing numbers and reconnect
             const numbersData = await Database.read(config.paths.numbers);
-            if (Array.isArray(numbersData.numbers)) {
-                for (const number of numbersData.numbers) {
+            const numbers = numbersData.numbers || [];
+
+            for (const number of numbers) {
+                if (number.autoReconnect) {
                     await this.connect(number.id);
                 }
             }
 
-            logger.info('Bot manager initialized successfully');
+            logger.logSystem('Bot manager initialized');
         } catch (error) {
             logger.error('Error initializing bot manager:', error);
             throw error;
@@ -39,260 +38,214 @@ class BotManager {
     }
 
     /**
-     * Connect to WhatsApp with a specific session ID
-     * @param {string} sessionId - Session identifier
-     * @returns {Promise<void>}
+     * Connect a WhatsApp number
+     * @param {string} numberId - Number ID
      */
-    async connect(sessionId) {
+    async connect(numberId) {
         try {
-            // Get auth state
-            const authPath = path.join(config.paths.data, 'auth', sessionId);
-            const { state, saveCreds } = await useMultiFileAuthState(authPath);
+            // Check if already connected
+            if (this.connections.has(numberId)) {
+                throw new Error('Number is already connected');
+            }
 
-            // Create socket connection
-            const sock = makeWASocket({
-                auth: state,
-                printQRInTerminal: false,
-                defaultQueryTimeoutMs: 60000
-            });
-
-            // Handle connection updates
-            sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect, qr } = update;
-
-                if (qr) {
-                    // Generate QR code
-                    try {
-                        const qrImage = await qrcode.toDataURL(qr);
-                        this.qrCodes.set(sessionId, qrImage);
-                        logger.info(`QR code generated for session ${sessionId}`);
-                    } catch (error) {
-                        logger.error(`Error generating QR code for session ${sessionId}:`, error);
-                    }
-                }
-
-                if (connection === 'close') {
-                    const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                    logger.info(`Connection closed for session ${sessionId}. Reconnect: ${shouldReconnect}`);
-                    
-                    if (shouldReconnect) {
-                        await this.connect(sessionId);
-                    }
-                } else if (connection === 'open') {
-                    logger.info(`Connected successfully for session ${sessionId}`);
-                    this.qrCodes.delete(sessionId);
-                    this.connections.set(sessionId, sock);
-
-                    // Update connection status in database
-                    await this.updateConnectionStatus(sessionId, 'connected');
+            // Create client
+            const client = new Client({
+                authStrategy: new LocalAuth({ clientId: numberId }),
+                puppeteer: {
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
                 }
             });
 
-            // Handle credentials update
-            sock.ev.on('creds.update', saveCreds);
+            // Set up event handlers
+            client.on('qr', async (qr) => {
+                try {
+                    // Generate QR code as data URL
+                    const qrDataUrl = await qrcode.toDataURL(qr);
+                    this.qrCodes.set(numberId, qrDataUrl);
 
-            // Handle messages
-            sock.ev.on('messages.upsert', async ({ messages }) => {
-                for (const message of messages) {
-                    if (!message.key.fromMe) {
-                        await this.handleIncomingMessage(sock, message);
-                    }
+                    logger.logWhatsApp('QR code generated', numberId);
+                } catch (error) {
+                    logger.error('Error generating QR code:', error);
                 }
             });
 
-            // Store connection
-            this.connections.set(sessionId, sock);
-            logger.info(`Connection initialized for session ${sessionId}`);
+            client.on('ready', async () => {
+                // Clear QR code
+                this.qrCodes.delete(numberId);
 
-        } catch (error) {
-            logger.error(`Error connecting session ${sessionId}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Handle incoming messages
-     * @param {Object} sock - WhatsApp socket connection
-     * @param {Object} message - Incoming message
-     */
-    async handleIncomingMessage(sock, message) {
-        try {
-            const { settings } = this;
-            const jid = message.key.remoteJid;
-
-            // Auto read messages if enabled
-            if (settings.autoRead) {
-                await sock.readMessages([message.key]);
-            }
-
-            // Check working hours if enabled
-            if (settings.workingHours.enabled && !this.isWithinWorkingHours()) {
-                if (settings.absenceMessage) {
-                    await this.sendMessage(sock, jid, { text: settings.absenceMessage });
-                }
-                return;
-            }
-
-            // Process message with random delay if auto-reply is enabled
-            if (settings.autoReply) {
-                const delay = Math.floor(
-                    Math.random() * (settings.responseDelay.max - settings.responseDelay.min) +
-                    settings.responseDelay.min
-                );
-
-                setTimeout(async () => {
-                    await this.processMessage(sock, message);
-                }, delay);
-            }
-
-        } catch (error) {
-            logger.error('Error handling incoming message:', error);
-        }
-    }
-
-    /**
-     * Process and respond to messages
-     * @param {Object} sock - WhatsApp socket connection
-     * @param {Object} message - Message to process
-     */
-    async processMessage(sock, message) {
-        try {
-            const text = message.message?.conversation || message.message?.extendedTextMessage?.text;
-            if (!text) return;
-
-            // Check for matching template
-            const template = this.settings.messageTemplates.find(t => 
-                text.toLowerCase().includes(t.trigger?.toLowerCase())
-            );
-
-            if (template) {
-                await this.sendMessage(sock, message.key.remoteJid, {
-                    text: template.content
-                });
-            }
-
-        } catch (error) {
-            logger.error('Error processing message:', error);
-        }
-    }
-
-    /**
-     * Send a message
-     * @param {Object} sock - WhatsApp socket connection
-     * @param {string} jid - Recipient JID
-     * @param {Object} content - Message content
-     */
-    async sendMessage(sock, jid, content) {
-        try {
-            await sock.sendMessage(jid, content);
-        } catch (error) {
-            logger.error('Error sending message:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Disconnect a session
-     * @param {string} sessionId - Session to disconnect
-     */
-    async disconnect(sessionId) {
-        try {
-            const sock = this.connections.get(sessionId);
-            if (sock) {
-                sock.end();
-                this.connections.delete(sessionId);
-                await this.updateConnectionStatus(sessionId, 'disconnected');
-                logger.info(`Disconnected session ${sessionId}`);
-            }
-        } catch (error) {
-            logger.error(`Error disconnecting session ${sessionId}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Update connection status in database
-     * @param {string} sessionId - Session ID
-     * @param {string} status - New status
-     */
-    async updateConnectionStatus(sessionId, status) {
-        try {
-            const data = await Database.read(config.paths.numbers);
-            if (Array.isArray(data.numbers)) {
+                // Update number status
                 await Database.updateInArray(
                     config.paths.numbers,
                     'numbers',
-                    number => number.id === sessionId,
-                    { status, lastStatusChange: new Date().toISOString() }
+                    n => n.id === numberId,
+                    {
+                        status: 'connected',
+                        lastActive: new Date().toISOString()
+                    }
                 );
+
+                logger.logWhatsApp('Client ready', numberId);
+            });
+
+            client.on('message', async (message) => {
+                try {
+                    await this.handleMessage(client, message, numberId);
+                } catch (error) {
+                    logger.error('Error handling message:', error);
+                }
+            });
+
+            client.on('disconnected', async (reason) => {
+                logger.logWhatsApp('Client disconnected', numberId, { reason });
+                await this.disconnect(numberId);
+            });
+
+            // Initialize client
+            await client.initialize();
+
+            // Store connection
+            this.connections.set(numberId, client);
+
+            logger.logWhatsApp('Connection initiated', numberId);
+        } catch (error) {
+            logger.error('Error connecting number:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Disconnect a WhatsApp number
+     * @param {string} numberId - Number ID
+     */
+    async disconnect(numberId) {
+        try {
+            const client = this.connections.get(numberId);
+            if (client) {
+                await client.destroy();
+                this.connections.delete(numberId);
+                this.qrCodes.delete(numberId);
+
+                // Update number status
+                await Database.updateInArray(
+                    config.paths.numbers,
+                    'numbers',
+                    n => n.id === numberId,
+                    {
+                        status: 'disconnected',
+                        lastActive: new Date().toISOString()
+                    }
+                );
+
+                logger.logWhatsApp('Client disconnected', numberId);
             }
         } catch (error) {
-            logger.error('Error updating connection status:', error);
+            logger.error('Error disconnecting number:', error);
+            throw error;
         }
     }
 
     /**
-     * Check if current time is within working hours
-     * @returns {boolean}
+     * Disconnect all WhatsApp numbers
      */
-    isWithinWorkingHours() {
-        const { workingHours } = this.settings;
-        if (!workingHours.enabled) return true;
-
-        const now = new Date();
-        const [startHour, startMinute] = workingHours.start.split(':').map(Number);
-        const [endHour, endMinute] = workingHours.end.split(':').map(Number);
-
-        const start = new Date(now);
-        start.setHours(startHour, startMinute, 0);
-
-        const end = new Date(now);
-        end.setHours(endHour, endMinute, 0);
-
-        return now >= start && now <= end;
+    async disconnectAll() {
+        const promises = Array.from(this.connections.keys()).map(numberId => 
+            this.disconnect(numberId)
+        );
+        await Promise.all(promises);
     }
 
     /**
-     * Get QR code for a session
-     * @param {string} sessionId - Session ID
+     * Get QR code for a number
+     * @param {string} numberId - Number ID
      * @returns {string|null} QR code data URL
      */
-    getQRCode(sessionId) {
-        return this.qrCodes.get(sessionId) || null;
+    getQRCode(numberId) {
+        return this.qrCodes.get(numberId) || null;
     }
 
     /**
-     * Get all active connections
-     * @returns {Array} Array of connection info
+     * Get active connections
+     * @returns {Array} Array of connected number IDs
      */
-    async getConnections() {
-        const connections = [];
-        for (const [id, sock] of this.connections.entries()) {
-            connections.push({
-                id,
-                status: sock.state.connection,
-                lastSeen: sock.lastSeen
-            });
-        }
-        return connections;
+    getConnections() {
+        return Array.from(this.connections.keys());
     }
 
     /**
      * Update bot settings
-     * @param {Object} newSettings - New settings
+     * @param {Object} settings - New settings
      */
-    async updateSettings(newSettings) {
-        this.settings = {
-            ...this.settings,
-            ...newSettings
-        };
+    async updateSettings(settings) {
+        this.settings = { ...this.settings, ...settings };
+        logger.logSystem('Settings updated', { settings });
+    }
 
-        // Save to database
-        await Database.write(config.paths.settings, {
-            settings: this.settings
-        });
+    /**
+     * Handle incoming message
+     * @param {Object} client - WhatsApp client
+     * @param {Object} message - Message object
+     * @param {string} numberId - Number ID
+     */
+    async handleMessage(client, message, numberId) {
+        try {
+            // Ignore if auto-reply is disabled
+            if (!this.settings.autoReply.enabled) {
+                return;
+            }
 
-        logger.info('Bot settings updated');
+            // Check working hours if enabled
+            if (this.settings.workingHours.enabled) {
+                const now = new Date();
+                const [startHour, startMinute] = this.settings.workingHours.start.split(':');
+                const [endHour, endMinute] = this.settings.workingHours.end.split(':');
+                const start = new Date(now).setHours(startHour, startMinute, 0);
+                const end = new Date(now).setHours(endHour, endMinute, 0);
+
+                if (now < start || now > end) {
+                    await message.reply(this.settings.workingHours.outOfHoursMessage);
+                    return;
+                }
+            }
+
+            // Check for message templates
+            const templates = this.settings.messageTemplates || [];
+            for (const template of templates) {
+                if (template.trigger && message.body.toLowerCase() === template.trigger.toLowerCase()) {
+                    // Add random delay if configured
+                    if (this.settings.responseDelay.max > 0) {
+                        const delay = Math.random() * 
+                            (this.settings.responseDelay.max - this.settings.responseDelay.min) + 
+                            this.settings.responseDelay.min;
+                        await new Promise(resolve => setTimeout(resolve, delay * 1000));
+                    }
+
+                    await message.reply(template.content);
+                    return;
+                }
+            }
+
+            // Send default auto-reply if no template matched
+            await message.reply(this.settings.autoReply.message);
+
+            // Update statistics
+            await Database.updateInArray(
+                config.paths.numbers,
+                'numbers',
+                n => n.id === numberId,
+                {
+                    'stats.received': (n.stats?.received || 0) + 1,
+                    lastActive: new Date().toISOString()
+                }
+            );
+
+            logger.logWhatsApp('Message handled', numberId, {
+                from: message.from,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error('Error handling message:', error);
+            throw error;
+        }
     }
 }
 
