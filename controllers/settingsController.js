@@ -1,184 +1,235 @@
+const config = require('../config/config');
 const Database = require('../utils/database');
 const logger = require('../utils/logger');
-const config = require('../config/config');
 const botManager = require('../bot/botManager');
 
 class SettingsController {
     /**
-     * Get all settings
+     * Render settings page
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
-    static async getSettings(req, res) {
+    static async renderSettings(req, res) {
         try {
+            // Get settings data
             const data = await Database.read(config.paths.settings);
-            return res.json({
-                success: true,
-                data: data.settings || config.botDefaults
+            const settings = data.settings || config.botDefaults;
+
+            res.render('settings', {
+                user: req.session.user,
+                settings,
+                path: '/settings'
             });
         } catch (error) {
-            logger.error('Error getting settings:', error);
-            return res.status(500).json({
-                error: 'Error fetching settings'
+            logger.error('Error rendering settings page:', error);
+            res.render('error', {
+                message: 'Error loading settings'
             });
         }
     }
 
     /**
-     * Update settings
+     * Update bot settings
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
     static async updateSettings(req, res) {
         try {
-            const newSettings = req.body;
+            const updates = req.body;
 
-            // Validate settings
-            const validationError = this.validateSettings(newSettings);
-            if (validationError) {
-                return res.status(400).json({
-                    error: validationError
-                });
+            // Validate working hours if enabled
+            if (updates.workingHours?.enabled) {
+                const { start, end } = updates.workingHours;
+                if (!start || !end || !start.match(/^\d{2}:\d{2}$/) || !end.match(/^\d{2}:\d{2}$/)) {
+                    return res.status(400).json({
+                        error: 'Invalid working hours format'
+                    });
+                }
             }
 
-            // Read current settings
-            const data = await Database.read(config.paths.settings);
-            
-            // Merge with existing settings
-            const updatedSettings = {
-                ...data.settings || config.botDefaults,
-                ...newSettings,
-                updatedAt: new Date().toISOString()
-            };
+            // Validate response delay
+            if (updates.responseDelay) {
+                const { min, max } = updates.responseDelay;
+                if (typeof min !== 'number' || typeof max !== 'number' || min < 0 || max < min) {
+                    return res.status(400).json({
+                        error: 'Invalid response delay values'
+                    });
+                }
+            }
 
-            // Save settings
+            // Update settings in database
             await Database.write(config.paths.settings, {
-                settings: updatedSettings
+                settings: {
+                    ...config.botDefaults,
+                    ...updates,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: req.session.user.id
+                }
             });
 
-            // Apply settings to active connections
-            await botManager.updateSettings(updatedSettings);
+            // Update bot manager settings
+            await botManager.updateSettings(updates);
 
-            // Log settings update
-            logger.info('Settings updated', {
-                userId: req.session.user.id,
-                changes: newSettings
+            logger.logAudit('Settings updated', req.session.user.id, {
+                updates
             });
 
-            return res.json({
+            res.json({
                 success: true,
-                data: updatedSettings
+                message: 'Settings updated successfully'
             });
         } catch (error) {
             logger.error('Error updating settings:', error);
-            return res.status(500).json({
+            res.status(500).json({
                 error: 'Error updating settings'
             });
         }
     }
 
     /**
-     * Validate settings object
-     * @param {Object} settings - Settings to validate
-     * @returns {string|null} Error message or null if valid
-     */
-    static validateSettings(settings) {
-        // Validate response delay
-        if (settings.responseDelay) {
-            const { min, max } = settings.responseDelay;
-            if (typeof min !== 'number' || typeof max !== 'number') {
-                return 'Response delay must be numbers';
-            }
-            if (min < 0 || max < 0) {
-                return 'Response delay cannot be negative';
-            }
-            if (min > max) {
-                return 'Minimum delay cannot be greater than maximum delay';
-            }
-        }
-
-        // Validate auto read setting
-        if ('autoRead' in settings && typeof settings.autoRead !== 'boolean') {
-            return 'Auto read must be a boolean';
-        }
-
-        // Validate inactivity timeout
-        if ('inactivityTimeout' in settings) {
-            if (typeof settings.inactivityTimeout !== 'number') {
-                return 'Inactivity timeout must be a number';
-            }
-            if (settings.inactivityTimeout < 0) {
-                return 'Inactivity timeout cannot be negative';
-            }
-        }
-
-        // Validate absence message
-        if ('absenceMessage' in settings) {
-            if (typeof settings.absenceMessage !== 'string') {
-                return 'Absence message must be a string';
-            }
-            if (settings.absenceMessage.length > 1000) {
-                return 'Absence message too long (max 1000 characters)';
-            }
-        }
-
-        // Validate working hours
-        if (settings.workingHours) {
-            const { start, end, timezone } = settings.workingHours;
-            if (!start || !end || !timezone) {
-                return 'Working hours must include start, end, and timezone';
-            }
-            // Validate time format (HH:mm)
-            const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-            if (!timeRegex.test(start) || !timeRegex.test(end)) {
-                return 'Invalid time format (use HH:mm)';
-            }
-        }
-
-        // Validate message templates
-        if (settings.messageTemplates) {
-            if (!Array.isArray(settings.messageTemplates)) {
-                return 'Message templates must be an array';
-            }
-            for (const template of settings.messageTemplates) {
-                if (!template.name || !template.content) {
-                    return 'Each template must have a name and content';
-                }
-                if (template.content.length > 1000) {
-                    return 'Template content too long (max 1000 characters)';
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Reset settings to defaults
+     * Add message template
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
-    static async resetSettings(req, res) {
+    static async addTemplate(req, res) {
         try {
-            await Database.write(config.paths.settings, {
-                settings: config.botDefaults
+            const { name, trigger, content } = req.body;
+
+            if (!name || !content) {
+                return res.status(400).json({
+                    error: 'Name and content are required'
+                });
+            }
+
+            // Get current settings
+            const data = await Database.read(config.paths.settings);
+            const settings = data.settings || config.botDefaults;
+
+            // Add template
+            const template = {
+                id: Date.now().toString(),
+                name,
+                trigger,
+                content,
+                createdAt: new Date().toISOString(),
+                createdBy: req.session.user.id
+            };
+
+            settings.messageTemplates = settings.messageTemplates || [];
+            settings.messageTemplates.push(template);
+
+            // Save settings
+            await Database.write(config.paths.settings, { settings });
+
+            // Update bot manager settings
+            await botManager.updateSettings(settings);
+
+            logger.logAudit('Message template added', req.session.user.id, {
+                templateId: template.id,
+                name
             });
 
-            // Apply default settings to active connections
-            await botManager.updateSettings(config.botDefaults);
-
-            logger.info('Settings reset to defaults', {
-                userId: req.session.user.id
-            });
-
-            return res.json({
+            res.json({
                 success: true,
-                data: config.botDefaults
+                template
             });
         } catch (error) {
-            logger.error('Error resetting settings:', error);
-            return res.status(500).json({
-                error: 'Error resetting settings'
+            logger.error('Error adding template:', error);
+            res.status(500).json({
+                error: 'Error adding message template'
+            });
+        }
+    }
+
+    /**
+     * Update message template
+     * @param {Object} req - Express request object
+     * @param {Object} res - Express response object
+     */
+    static async updateTemplate(req, res) {
+        try {
+            const { id } = req.params;
+            const updates = req.body;
+
+            // Get current settings
+            const data = await Database.read(config.paths.settings);
+            const settings = data.settings || config.botDefaults;
+
+            // Find and update template
+            settings.messageTemplates = settings.messageTemplates || [];
+            const templateIndex = settings.messageTemplates.findIndex(t => t.id === id);
+
+            if (templateIndex === -1) {
+                return res.status(404).json({
+                    error: 'Template not found'
+                });
+            }
+
+            settings.messageTemplates[templateIndex] = {
+                ...settings.messageTemplates[templateIndex],
+                ...updates,
+                updatedAt: new Date().toISOString(),
+                updatedBy: req.session.user.id
+            };
+
+            // Save settings
+            await Database.write(config.paths.settings, { settings });
+
+            // Update bot manager settings
+            await botManager.updateSettings(settings);
+
+            logger.logAudit('Message template updated', req.session.user.id, {
+                templateId: id,
+                updates
+            });
+
+            res.json({
+                success: true,
+                template: settings.messageTemplates[templateIndex]
+            });
+        } catch (error) {
+            logger.error('Error updating template:', error);
+            res.status(500).json({
+                error: 'Error updating message template'
+            });
+        }
+    }
+
+    /**
+     * Delete message template
+     * @param {Object} req - Express request object
+     * @param {Object} res - Express response object
+     */
+    static async deleteTemplate(req, res) {
+        try {
+            const { id } = req.params;
+
+            // Get current settings
+            const data = await Database.read(config.paths.settings);
+            const settings = data.settings || config.botDefaults;
+
+            // Remove template
+            settings.messageTemplates = (settings.messageTemplates || [])
+                .filter(t => t.id !== id);
+
+            // Save settings
+            await Database.write(config.paths.settings, { settings });
+
+            // Update bot manager settings
+            await botManager.updateSettings(settings);
+
+            logger.logAudit('Message template deleted', req.session.user.id, {
+                templateId: id
+            });
+
+            res.json({
+                success: true,
+                message: 'Template deleted successfully'
+            });
+        } catch (error) {
+            logger.error('Error deleting template:', error);
+            res.status(500).json({
+                error: 'Error deleting message template'
             });
         }
     }
@@ -190,12 +241,21 @@ class SettingsController {
      */
     static async exportSettings(req, res) {
         try {
+            // Get settings data
             const data = await Database.read(config.paths.settings);
-            res.attachment('whatsapp-bot-settings.json');
-            return res.json(data.settings || config.botDefaults);
+            const settings = data.settings || config.botDefaults;
+
+            // Remove sensitive data
+            delete settings.updatedBy;
+
+            // Set headers for download
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Disposition', 'attachment; filename=whatsapp-bot-settings.json');
+
+            res.json(settings);
         } catch (error) {
             logger.error('Error exporting settings:', error);
-            return res.status(500).json({
+            res.status(500).json({
                 error: 'Error exporting settings'
             });
         }
@@ -210,56 +270,38 @@ class SettingsController {
         try {
             const settings = req.body;
 
-            // Validate imported settings
-            const validationError = this.validateSettings(settings);
-            if (validationError) {
+            // Validate settings structure
+            if (!settings || typeof settings !== 'object') {
                 return res.status(400).json({
-                    error: validationError
+                    error: 'Invalid settings format'
                 });
             }
 
-            // Save imported settings
+            // Merge with defaults and save
+            const mergedSettings = {
+                ...config.botDefaults,
+                ...settings,
+                updatedAt: new Date().toISOString(),
+                updatedBy: req.session.user.id
+            };
+
             await Database.write(config.paths.settings, {
-                settings: {
-                    ...settings,
-                    importedAt: new Date().toISOString()
-                }
+                settings: mergedSettings
             });
 
-            // Apply imported settings to active connections
-            await botManager.updateSettings(settings);
+            // Update bot manager settings
+            await botManager.updateSettings(mergedSettings);
 
-            logger.info('Settings imported', {
-                userId: req.session.user.id
-            });
+            logger.logAudit('Settings imported', req.session.user.id);
 
-            return res.json({
+            res.json({
                 success: true,
                 message: 'Settings imported successfully'
             });
         } catch (error) {
             logger.error('Error importing settings:', error);
-            return res.status(500).json({
+            res.status(500).json({
                 error: 'Error importing settings'
-            });
-        }
-    }
-
-    /**
-     * Render settings page
-     * @param {Object} req - Express request object
-     * @param {Object} res - Express response object
-     */
-    static async renderSettingsPage(req, res) {
-        try {
-            res.render('settings', {
-                title: 'Bot Settings',
-                user: req.session.user
-            });
-        } catch (error) {
-            logger.error('Error rendering settings page:', error);
-            res.status(500).render('error', {
-                message: 'Error loading settings page'
             });
         }
     }
