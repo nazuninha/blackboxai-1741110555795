@@ -1,0 +1,288 @@
+<%- include('layout', { title: 'Dashboard' }) %>
+
+<div class="container mx-auto" x-data="dashboard()">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p class="text-gray-600 dark:text-gray-400">Monitor your WhatsApp bot performance and metrics</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Numbers -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Numbers</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white" x-text="metrics.totalNumbers">0</p>
+                </div>
+                <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                    <i class="fas fa-phone text-green-600 dark:text-green-400"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Active:</span>
+                    <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white" x-text="metrics.activeNumbers">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Today -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Messages Today</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white" x-text="metrics.messagesToday">0</p>
+                </div>
+                <div class="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                    <i class="fas fa-comment text-blue-600 dark:text-blue-400"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Response Rate:</span>
+                    <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white" x-text="metrics.responseRate + '%'">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">System Status</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                        <span x-text="systemStatus">Online</span>
+                    </p>
+                </div>
+                <div class="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
+                    <i class="fas fa-server text-purple-600 dark:text-purple-400"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Uptime:</span>
+                    <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white" x-text="formatUptime(metrics.uptime)">0s</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Last Error -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">System Health</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                        <span x-text="metrics.lastError ? 'Warning' : 'Healthy'">Healthy</span>
+                    </p>
+                </div>
+                <div class="p-3 bg-yellow-100 dark:bg-yellow-900 rounded-full">
+                    <i class="fas fa-heartbeat text-yellow-600 dark:text-yellow-400"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="flex items-center">
+                    <template x-if="metrics.lastError">
+                        <span class="text-sm text-red-600 dark:text-red-400" x-text="metrics.lastError">No errors</span>
+                    </template>
+                    <template x-if="!metrics.lastError">
+                        <span class="text-sm text-green-600 dark:text-green-400">All systems operational</span>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Message History -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Message History</h3>
+            <canvas id="messageChart" class="w-full"></canvas>
+        </div>
+
+        <!-- Response Time -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Response Time</h3>
+            <canvas id="responseChart" class="w-full"></canvas>
+        </div>
+    </div>
+
+    <!-- Active Numbers Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-8">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Active Numbers</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Messages Today</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Active</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="number in activeNumbers" :key="number.id">
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <img class="h-10 w-10 rounded-full" :src="number.avatar || 'https://ui-avatars.com/api/?name=' + number.name" :alt="number.name">
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="number.name"></div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400" x-text="number.id"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                    :class="{
+                                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': number.status === 'connected',
+                                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': number.status === 'disconnected',
+                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': number.status === 'connecting'
+                                    }"
+                                    x-text="number.status">
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" x-text="number.messagesCount">0</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" x-text="formatDate(number.lastActive)"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function dashboard() {
+    return {
+        metrics: {
+            totalNumbers: 0,
+            activeNumbers: 0,
+            messagesToday: 0,
+            responseRate: 0,
+            uptime: 0,
+            lastError: null
+        },
+        activeNumbers: [],
+        systemStatus: 'Online',
+        charts: {},
+
+        async init() {
+            await this.loadDashboardData();
+            this.initCharts();
+            this.startRealTimeUpdates();
+        },
+
+        async loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/data');
+                const { data } = await response.json();
+                this.metrics = data.metrics;
+                this.activeNumbers = data.numbers;
+                this.updateCharts(data.chartData);
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            }
+        },
+
+        initCharts() {
+            // Message History Chart
+            this.charts.messages = new Chart(document.getElementById('messageChart'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Messages Sent',
+                        data: [],
+                        borderColor: '#10B981',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Response Time Chart
+            this.charts.response = new Chart(document.getElementById('responseChart'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Response Time (ms)',
+                        data: [],
+                        borderColor: '#3B82F6',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        },
+
+        updateCharts(data) {
+            if (data.messageHistory) {
+                this.charts.messages.data = data.messageHistory;
+                this.charts.messages.update();
+            }
+            if (data.responseTime) {
+                this.charts.response.data = data.responseTime;
+                this.charts.response.update();
+            }
+        },
+
+        startRealTimeUpdates() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/dashboard/updates');
+                    const { data } = await response.json();
+                    this.updateMetrics(data);
+                } catch (error) {
+                    console.error('Error fetching real-time updates:', error);
+                    this.systemStatus = 'Offline';
+                }
+            }, 5000);
+        },
+
+        updateMetrics(data) {
+            this.metrics.activeNumbers = data.activeConnections.length;
+            this.metrics.messagesToday = data.messageCount;
+            this.metrics.responseRate = data.responseRate;
+            this.systemStatus = 'Online';
+        },
+
+        formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        },
+
+        formatDate(date) {
+            return new Date(date).toLocaleString();
+        }
+    }
+}
+</script>
