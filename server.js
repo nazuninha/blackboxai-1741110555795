@@ -1,157 +1,123 @@
 const express = require('express');
 const session = require('express-session');
-const bodyParser = require('body-parser');
-const morgan = require('morgan');
-const helmet = require('helmet');
+const FileStore = require('session-file-store')(session);
 const path = require('path');
 const config = require('./config/config');
 const logger = require('./utils/logger');
 const botManager = require('./bot/botManager');
 
-// Initialize express app
+// Create Express app
 const app = express();
 
-// Security middleware
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
-            imgSrc: ["'self'", "data:", "https:", "http:"],
-            connectSrc: ["'self'"],
-            fontSrc: ["'self'", "https:", "http:", "data:"],
-            objectSrc: ["'none'"],
-            mediaSrc: ["'self'"],
-            frameSrc: ["'none'"],
-        },
-    }
-}));
-
-// Logging middleware
-app.use(morgan('combined', { stream: logger.accessLogStream }));
-
-// Body parser middleware
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Session middleware
-app.use(session({
-    secret: config.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: config.environment === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-}));
-
-// Set view engine
+// View engine setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Serve static files
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize data files if they don't exist
-const fs = require('fs');
-const dataFiles = [
-    { path: config.paths.users, default: { users: [] } },
-    { path: config.paths.settings, default: { settings: config.botDefaults } },
-    { path: config.paths.numbers, default: { numbers: [] } },
-    { path: config.paths.menus, default: { menus: [] } }
-];
-
-dataFiles.forEach(file => {
-    if (!fs.existsSync(file.path)) {
-        const dir = path.dirname(file.path);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(file.path, JSON.stringify(file.default, null, 2));
+// Session middleware
+app.use(session({
+    store: new FileStore({
+        path: config.paths.sessions,
+        ttl: config.auth.sessionTimeout / 1000
+    }),
+    secret: config.auth.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: config.auth.sessionTimeout
     }
+}));
+
+// Security middleware
+app.use((req, res, next) => {
+    // CORS headers
+    res.header('Access-Control-Allow-Origin', config.cors.origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', true);
+
+    // Security headers
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('X-XSS-Protection', '1; mode=block');
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+
+    next();
 });
 
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, 'logs');
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir);
-}
+// Routes
+app.use('/', require('./routes/auth'));
+app.use('/', require('./routes/dashboard'));
+app.use('/', require('./routes/numbers'));
+app.use('/', require('./routes/settings'));
 
-// Mount routes
-const authRoutes = require('./routes/auth');
-const dashboardRoutes = require('./routes/dashboard');
-const numbersRoutes = require('./routes/numbers');
-const settingsRoutes = require('./routes/settings');
-
-app.use(authRoutes);
-app.use(dashboardRoutes);
-app.use(numbersRoutes);
-app.use(settingsRoutes);
-
-// Root route redirect to login/dashboard
-app.get('/', (req, res) => {
-    res.redirect(req.session.user ? '/dashboard' : '/login');
-});
-
-// 404 handler
-app.use((req, res) => {
+// Error handling
+app.use((req, res, next) => {
     res.status(404).render('error', {
-        title: 'Not Found',
-        message: 'The page you are looking for does not exist.',
-        error: {
-            status: 404
-        }
+        statusCode: 404,
+        message: 'Page not found'
     });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
     logger.error('Unhandled error:', err);
-    
+
     res.status(err.status || 500).render('error', {
-        title: 'Error',
-        message: config.environment === 'development' ? err.message : 'Internal Server Error',
-        error: config.environment === 'development' ? err : {}
+        statusCode: err.status || 500,
+        message: process.env.NODE_ENV === 'production'
+            ? 'Internal server error'
+            : err.message,
+        error: process.env.NODE_ENV === 'production' ? {} : err
     });
+});
+
+// Start server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    logger.info(`Server running on port ${port}`);
 });
 
 // Initialize bot manager
 botManager.init().catch(err => {
     logger.error('Error initializing bot manager:', err);
+    process.exit(1);
 });
 
-// Start server
-const server = app.listen(config.port, () => {
-    logger.info(`Server running on port ${config.port}`);
-    logger.info(`Environment: ${config.environment}`);
-});
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
+// Handle process termination
+process.on('SIGTERM', async () => {
     logger.info('SIGTERM received. Shutting down gracefully...');
-    server.close(() => {
-        logger.info('Server closed. Exiting process.');
-        process.exit(0);
-    });
+    
+    try {
+        // Disconnect all bots
+        await botManager.disconnectAll();
+        
+        // Close server
+        server.close(() => {
+            logger.info('Server closed');
+            process.exit(0);
+        });
+    } catch (error) {
+        logger.error('Error during shutdown:', error);
+        process.exit(1);
+    }
 });
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received. Shutting down gracefully...');
-    server.close(() => {
-        logger.info('Server closed. Exiting process.');
-        process.exit(0);
-    });
-});
-
-// Handle uncaught exceptions and rejections
 process.on('uncaughtException', (err) => {
-    logger.error('Uncaught Exception:', err);
+    logger.error('Uncaught exception:', err);
     process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled rejection at:', promise, 'reason:', reason);
     process.exit(1);
 });
