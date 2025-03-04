@@ -1,96 +1,138 @@
-require('dotenv').config();
 const path = require('path');
+
+// Load environment variables
+require('dotenv').config();
 
 const config = {
     // Environment
-    environment: process.env.NODE_ENV || 'development',
-    port: parseInt(process.env.PORT, 10) || 3000,
-    sessionSecret: process.env.SESSION_SECRET || 'default-secret-key',
-
-    // Paths
-    paths: {
-        data: process.env.DATA_DIR || path.join(__dirname, '..', 'data'),
-        logs: process.env.LOG_DIR || path.join(__dirname, '..', 'logs'),
-        users: path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'users.json'),
-        settings: path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'settings.json'),
-        numbers: path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'numbers.json'),
-        menus: path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'menus.json')
+    env: process.env.NODE_ENV || 'development',
+    
+    // Server
+    port: process.env.PORT || 3000,
+    
+    // Authentication
+    auth: {
+        sessionSecret: process.env.SESSION_SECRET || 'your-secret-key',
+        sessionTimeout: parseInt(process.env.SESSION_TIMEOUT) || 24 * 60 * 60 * 1000, // 24 hours
+        bcryptRounds: 10,
+        maxLoginAttempts: 5,
+        lockoutDuration: 15 * 60 * 1000, // 15 minutes
     },
 
-    // Bot Configuration
-    botDefaults: {
-        name: process.env.BOT_NAME || 'WhatsApp Bot',
-        description: process.env.BOT_DESCRIPTION || 'A WhatsApp bot for managing multiple numbers',
-        responseDelay: {
-            min: parseInt(process.env.DEFAULT_RESPONSE_DELAY_MIN, 10) || 1000,
-            max: parseInt(process.env.DEFAULT_RESPONSE_DELAY_MAX, 10) || 3000
+    // CORS
+    cors: {
+        origin: process.env.CORS_ORIGIN || '*',
+    },
+
+    // File paths
+    paths: {
+        data: path.join(__dirname, '../data'),
+        logs: path.join(__dirname, '../logs'),
+        sessions: path.join(__dirname, '../sessions'),
+        get users() { return path.join(this.data, 'users.json') },
+        get numbers() { return path.join(this.data, 'numbers.json') },
+        get settings() { return path.join(this.data, 'settings.json') },
+    },
+
+    // Rate limiting
+    rateLimit: {
+        api: {
+            windowMs: 15 * 60 * 1000, // 15 minutes
+            max: 100, // limit each IP to 100 requests per windowMs
         },
-        autoRead: true,
-        autoReply: true,
+        auth: {
+            windowMs: 60 * 60 * 1000, // 1 hour
+            max: 5, // limit each IP to 5 login attempts per windowMs
+        },
+        whatsapp: {
+            windowMs: 24 * 60 * 60 * 1000, // 24 hours
+            max: 10, // limit each IP to 10 connection attempts per windowMs
+        },
+    },
+
+    // WhatsApp bot defaults
+    botDefaults: {
+        autoReply: {
+            enabled: false,
+            message: "Thanks for your message! I'll get back to you soon.",
+        },
         workingHours: {
             enabled: false,
             start: '09:00',
             end: '17:00',
-            timezone: 'UTC'
+            timezone: 'UTC',
+            outOfHoursMessage: "I'm currently outside working hours. I'll respond when I'm back.",
         },
-        messageTemplates: [],
-        absenceMessage: 'We are currently outside working hours. We will get back to you as soon as possible.',
-        inactivityTimeout: parseInt(process.env.DEFAULT_INACTIVITY_TIMEOUT, 10) || 3600
-    },
-
-    // Security
-    auth: {
-        bcryptRounds: 10,
-        sessionTimeout: 24 * 60 * 60 * 1000, // 24 hours
-        maxLoginAttempts: 5,
-        lockoutDuration: 15 * 60 * 1000 // 15 minutes
-    },
-
-    // Rate Limiting
-    rateLimit: {
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 100, // Limit each IP to 100 requests per windowMs
-        message: 'Too many requests from this IP, please try again later.'
+        responseDelay: {
+            min: 1,  // seconds
+            max: 5,  // seconds
+        },
+        messageTemplates: [
+            {
+                id: 'welcome',
+                name: 'Welcome Message',
+                trigger: '!welcome',
+                content: 'Welcome! How can I help you today?',
+            },
+            {
+                id: 'help',
+                name: 'Help Message',
+                trigger: '!help',
+                content: 'Available commands:\n!welcome - Show welcome message\n!help - Show this help message',
+            },
+        ],
     },
 
     // Logging
     logging: {
-        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-        maxFiles: 5,
-        maxSize: '10m'
+        level: process.env.LOG_LEVEL || 'info',
+        file: {
+            enabled: true,
+            filename: path.join(__dirname, '../logs/app.log'),
+            maxSize: '10m',
+            maxFiles: '7d',
+        },
+        audit: {
+            enabled: true,
+            filename: path.join(__dirname, '../logs/audit.log'),
+        },
     },
 
-    // WhatsApp Connection
-    whatsapp: {
-        reconnectInterval: 10000, // 10 seconds
-        maxReconnectAttempts: 5,
-        qrCodeTimeout: 60000, // 1 minute
-        defaultPresence: 'available',
-        markMessagesRead: true
+    // Default admin user (created if no users exist)
+    defaultAdmin: {
+        name: 'Admin',
+        email: process.env.ADMIN_EMAIL || 'admin@example.com',
+        password: process.env.ADMIN_PASSWORD || 'admin123',
+        role: 'admin',
     },
 
-    // Development Settings
-    development: {
-        enableDebugLogs: true,
-        mockWhatsAppConnection: false
-    },
+    // Initialize required directories
+    init() {
+        const fs = require('fs');
+        const dirs = [this.paths.data, this.paths.logs, this.paths.sessions];
+        
+        for (const dir of dirs) {
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+        }
 
-    // Production Settings
-    production: {
-        enableDebugLogs: false,
-        trustProxy: true
-    }
+        // Create default files if they don't exist
+        const files = [
+            { path: this.paths.users, content: { users: [] } },
+            { path: this.paths.numbers, content: { numbers: [] } },
+            { path: this.paths.settings, content: { settings: this.botDefaults } },
+        ];
+
+        for (const file of files) {
+            if (!fs.existsSync(file.path)) {
+                fs.writeFileSync(file.path, JSON.stringify(file.content, null, 2));
+            }
+        }
+    },
 };
 
-// Environment-specific overrides
-if (config.environment === 'production') {
-    Object.assign(config, config.production);
-} else {
-    Object.assign(config, config.development);
-}
-
-// Delete environment-specific configs from final export
-delete config.development;
-delete config.production;
+// Initialize directories and files
+config.init();
 
 module.exports = config;
