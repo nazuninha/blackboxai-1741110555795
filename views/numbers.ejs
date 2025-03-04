@@ -1,547 +1,392 @@
-<%- include('layout', { title: 'Numbers Management' }) %>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'WhatsApp Numbers' }) %>
+<body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="{ 'dark': darkMode }">
+    <%- include('partials/nav', { path: '/numbers', user: locals.user }) %>
 
-<div class="container mx-auto" x-data="numbersManagement()">
-    <!-- Header -->
-    <div class="mb-8 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">WhatsApp Numbers</h1>
-            <p class="text-gray-600 dark:text-gray-400">Manage your connected WhatsApp numbers</p>
-        </div>
-        <div class="flex space-x-4">
-            <!-- Add New Number Button -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="numbersManager()">
+        <!-- Page Header -->
+        <div class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">WhatsApp Numbers</h1>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your WhatsApp bot instances</p>
+            </div>
             <button 
-                @click="showConnectionModal = true"
+                @click="showAddModal = true"
                 class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
                 <i class="fas fa-plus mr-2"></i>
                 Add Number
             </button>
-            
-            <!-- Bulk Actions (Admin Only) -->
-            <template x-if="selectedNumbers.length > 0">
-                <div class="relative" @click.away="showBulkActions = false">
-                    <button 
-                        @click="showBulkActions = !showBulkActions"
-                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                    >
-                        Bulk Actions
-                        <i class="fas fa-chevron-down ml-2"></i>
-                    </button>
-                    
-                    <!-- Bulk Actions Dropdown -->
-                    <div 
-                        x-show="showBulkActions"
-                        class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700"
-                    >
-                        <div class="py-1">
-                            <button
-                                @click="bulkDisconnect()"
-                                class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                            >
-                                Disconnect Selected
-                            </button>
-                            <button
-                                @click="bulkRemove()"
-                                class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:text-red-400 dark:hover:bg-gray-700"
-                            >
-                                Remove Selected
-                            </button>
+        </div>
+
+        <!-- Numbers Grid -->
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <template x-for="number in numbers" :key="number.id">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                    <div class="p-6">
+                        <!-- Header -->
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="number.name"></h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" x-text="number.phoneNumber"></p>
+                            </div>
+                            <div class="relative" x-data="{ open: false }">
+                                <button 
+                                    @click="open = !open"
+                                    class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+                                >
+                                    <i class="fas fa-ellipsis-v text-gray-400"></i>
+                                </button>
+                                <div 
+                                    x-show="open"
+                                    @click.away="open = false"
+                                    class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700"
+                                >
+                                    <div class="py-1">
+                                        <button 
+                                            @click="editNumber(number)"
+                                            class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+                                        >
+                                            <i class="fas fa-edit mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                                            Edit
+                                        </button>
+                                    </div>
+                                    <div class="py-1">
+                                        <button 
+                                            @click="deleteNumber(number)"
+                                            class="group flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+                                        >
+                                            <i class="fas fa-trash-alt mr-3"></i>
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mt-4">
+                            <div class="flex items-center">
+                                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Status:</span>
+                                <span 
+                                    class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                    :class="{
+                                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300': number.isConnected,
+                                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300': !number.isConnected
+                                    }"
+                                >
+                                    <i class="fas fa-circle text-xs mr-1"></i>
+                                    <span x-text="number.isConnected ? 'Connected' : 'Disconnected'"></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- QR Code (if not connected) -->
+                        <template x-if="!number.isConnected && number.qrCode">
+                            <div class="mt-4">
+                                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg">
+                                    <img :src="number.qrCode" alt="QR Code" class="w-full">
+                                    <p class="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
+                                        Scan with WhatsApp to connect
+                                    </p>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Stats -->
+                        <div class="mt-4 grid grid-cols-2 gap-4">
+                            <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Messages Sent</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-900 dark:text-white" x-text="number.stats?.sent || 0"></div>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Messages Received</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-900 dark:text-white" x-text="number.stats?.received || 0"></div>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="mt-6 flex space-x-3">
+                            <template x-if="!number.isConnected">
+                                <button 
+                                    @click="connectNumber(number)"
+                                    class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                >
+                                    <i class="fas fa-plug mr-2"></i>
+                                    Connect
+                                </button>
+                            </template>
+                            <template x-if="number.isConnected">
+                                <button 
+                                    @click="disconnectNumber(number)"
+                                    class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                >
+                                    <i class="fas fa-power-off mr-2"></i>
+                                    Disconnect
+                                </button>
+                            </template>
                         </div>
                     </div>
                 </div>
             </template>
         </div>
-    </div>
 
-    <!-- Numbers List -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-900">
-                    <tr>
-                        <th class="px-6 py-3 text-left">
-                            <input 
-                                type="checkbox" 
-                                class="rounded border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                                @click="toggleAllNumbers"
-                                :checked="selectedNumbers.length === numbers.length"
-                            >
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Connected Since</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    <template x-for="number in numbers" :key="number.id">
-                        <tr>
-                            <td class="px-6 py-4">
-                                <input 
-                                    type="checkbox" 
-                                    class="rounded border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                                    :checked="selectedNumbers.includes(number.id)"
-                                    @click="toggleNumber(number.id)"
-                                >
-                            </td>
-                            <td class="px-6 py-4">
-                                <div class="flex items-center">
-                                    <div class="flex-shrink-0 h-10 w-10">
-                                        <img 
-                                            class="h-10 w-10 rounded-full" 
-                                            :src="number.avatar || 'https://ui-avatars.com/api/?name=' + number.name" 
-                                            :alt="number.name"
+        <!-- Add Number Modal -->
+        <div 
+            x-show="showAddModal" 
+            class="fixed z-10 inset-0 overflow-y-auto" 
+            aria-labelledby="modal-title" 
+            role="dialog" 
+            aria-modal="true"
+        >
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div 
+                    x-show="showAddModal"
+                    x-transition:enter="ease-out duration-300"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="ease-in duration-200"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0"
+                    class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                    @click="showAddModal = false"
+                ></div>
+
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-phone text-green-600 dark:text-green-400"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                                Add WhatsApp Number
+                            </h3>
+                            <div class="mt-4">
+                                <form @submit.prevent="addNumber">
+                                    <!-- Phone Number -->
+                                    <div>
+                                        <label for="phoneNumber" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Phone Number
+                                        </label>
+                                        <div class="mt-1">
+                                            <input 
+                                                type="text" 
+                                                name="phoneNumber" 
+                                                id="phoneNumber" 
+                                                x-model="newNumber.phoneNumber"
+                                                class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                                placeholder="+1234567890"
+                                                required
+                                            >
+                                        </div>
+                                    </div>
+
+                                    <!-- Name -->
+                                    <div class="mt-4">
+                                        <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Name
+                                        </label>
+                                        <div class="mt-1">
+                                            <input 
+                                                type="text" 
+                                                name="name" 
+                                                id="name" 
+                                                x-model="newNumber.name"
+                                                class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                                placeholder="Bot Name"
+                                            >
+                                        </div>
+                                    </div>
+
+                                    <!-- Description -->
+                                    <div class="mt-4">
+                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Description
+                                        </label>
+                                        <div class="mt-1">
+                                            <textarea 
+                                                name="description" 
+                                                id="description" 
+                                                x-model="newNumber.description"
+                                                rows="3"
+                                                class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                                placeholder="Optional description"
+                                            ></textarea>
+                                        </div>
+                                    </div>
+
+                                    <!-- Buttons -->
+                                    <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
+                                        <button 
+                                            type="submit"
+                                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:col-start-2 sm:text-sm"
+                                            :disabled="loading"
                                         >
+                                            <template x-if="!loading">Add Number</template>
+                                            <template x-if="loading">
+                                                <div class="flex items-center">
+                                                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Processing...
+                                                </div>
+                                            </template>
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:col-start-1 sm:text-sm"
+                                            @click="showAddModal = false"
+                                        >
+                                            Cancel
+                                        </button>
                                     </div>
-                                    <div class="ml-4">
-                                        <div 
-                                            class="text-sm font-medium text-gray-900 dark:text-white cursor-pointer"
-                                            @click="startRename(number)"
-                                            x-text="number.name"
-                                        ></div>
-                                        <div class="text-sm text-gray-500 dark:text-gray-400" x-text="number.id"></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4">
-                                <span 
-                                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                    :class="{
-                                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': number.status === 'connected',
-                                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': number.status === 'disconnected',
-                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': number.status === 'connecting'
-                                    }"
-                                    x-text="number.status"
-                                ></span>
-                            </td>
-                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="formatDate(number.connectedAt)"></td>
-                            <td class="px-6 py-4">
-                                <div class="flex space-x-3">
-                                    <button 
-                                        @click="disconnectNumber(number.id)"
-                                        class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                                        :disabled="number.status === 'disconnected'"
-                                    >
-                                        <i class="fas fa-power-off"></i>
-                                    </button>
-                                    <button 
-                                        @click="removeNumber(number.id)"
-                                        class="text-red-400 hover:text-red-500"
-                                    >
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Connection Modal -->
-    <div 
-        x-show="showConnectionModal" 
-        class="fixed inset-0 z-50 overflow-y-auto"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-    >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                class="fixed inset-0 transition-opacity" 
-                aria-hidden="true"
-                @click="showConnectionModal = false"
-            >
-                <div class="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
-            </div>
-
-            <div 
-                class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full"
-                @click.away="showConnectionModal = false"
-            >
-                <!-- Modal Header -->
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Add New WhatsApp Number</h3>
-                </div>
-
-                <!-- Modal Content -->
-                <div class="px-6 py-4">
-                    <!-- Connection Type Tabs -->
-                    <div class="border-b border-gray-200 dark:border-gray-700">
-                        <nav class="-mb-px flex space-x-8">
-                            <button
-                                @click="connectionType = 'qr'"
-                                class="py-4 px-1 border-b-2 font-medium text-sm"
-                                :class="connectionType === 'qr' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
-                            >
-                                <i class="fas fa-qrcode mr-2"></i>
-                                QR Code
-                            </button>
-                            <button
-                                @click="connectionType = 'phone'"
-                                class="py-4 px-1 border-b-2 font-medium text-sm"
-                                :class="connectionType === 'phone' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
-                            >
-                                <i class="fas fa-phone mr-2"></i>
-                                Phone Number
-                            </button>
-                        </nav>
-                    </div>
-
-                    <!-- QR Code Connection -->
-                    <div x-show="connectionType === 'qr'" class="mt-4">
-                        <template x-if="!qrCode">
-                            <div class="text-center py-8">
-                                <button
-                                    @click="generateQR"
-                                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                    :disabled="generating"
-                                >
-                                    <template x-if="!generating">
-                                        <span>Generate QR Code</span>
-                                    </template>
-                                    <template x-if="generating">
-                                        <span>Generating...</span>
-                                    </template>
-                                </button>
+                                </form>
                             </div>
-                        </template>
-                        <template x-if="qrCode">
-                            <div class="text-center py-4">
-                                <img :src="qrCode" alt="WhatsApp QR Code" class="mx-auto">
-                                <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                                    Scan this QR code with WhatsApp on your phone
-                                </p>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- Phone Number Connection -->
-                    <div x-show="connectionType === 'phone'" class="mt-4">
-                        <form @submit.prevent="connectWithPhone">
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Phone Number
-                                </label>
-                                <div class="mt-1 relative rounded-md shadow-sm">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <i class="fas fa-phone text-gray-400"></i>
-                                    </div>
-                                    <input
-                                        type="tel"
-                                        x-model="phoneNumber"
-                                        class="focus:ring-green-500 focus:border-green-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="+1234567890"
-                                        required
-                                    >
-                                </div>
-                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                    Enter the phone number in international format
-                                </p>
-                            </div>
-                            <div class="mt-6">
-                                <button
-                                    type="submit"
-                                    class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                    :disabled="connecting"
-                                >
-                                    <template x-if="!connecting">
-                                        <span>Connect</span>
-                                    </template>
-                                    <template x-if="connecting">
-                                        <span>Connecting...</span>
-                                    </template>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rename Modal -->
-    <div 
-        x-show="showRenameModal" 
-        class="fixed inset-0 z-50 overflow-y-auto"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-    >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                class="fixed inset-0 transition-opacity" 
-                aria-hidden="true"
-                @click="showRenameModal = false"
-            >
-                <div class="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
-            </div>
-
-            <div 
-                class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full"
-                @click.away="showRenameModal = false"
-            >
-                <form @submit.prevent="renameNumber">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Rename Number</h3>
-                    </div>
-                    <div class="px-6 py-4">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                New Name
-                            </label>
-                            <input
-                                type="text"
-                                x-model="newName"
-                                class="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                required
-                            >
                         </div>
                     </div>
-                    <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700 text-right">
-                        <button
-                            type="button"
-                            class="mr-3 inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-gray-600 dark:text-gray-300 dark:border-gray-500 dark:hover:bg-gray-500"
-                            @click="showRenameModal = false"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            class="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        >
-                            Save
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-function numbersManagement() {
-    return {
-        numbers: [],
-        selectedNumbers: [],
-        showConnectionModal: false,
-        showRenameModal: false,
-        showBulkActions: false,
-        connectionType: 'qr',
-        qrCode: null,
-        phoneNumber: '',
-        generating: false,
-        connecting: false,
-        currentNumber: null,
-        newName: '',
-        qrCheckInterval: null,
+    <!-- Numbers Manager Script -->
+    <script>
+        function numbersManager() {
+            return {
+                numbers: <%- JSON.stringify(numbers || []) %>,
+                showAddModal: false,
+                loading: false,
+                newNumber: {
+                    phoneNumber: '',
+                    name: '',
+                    description: ''
+                },
 
-        async init() {
-            await this.loadNumbers();
-            this.startStatusUpdates();
-        },
+                async addNumber() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/numbers', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.newNumber)
+                        });
 
-        async loadNumbers() {
-            try {
-                const response = await fetch('/api/numbers');
-                const { data } = await response.json();
-                this.numbers = data;
-            } catch (error) {
-                console.error('Error loading numbers:', error);
-            }
-        },
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
 
-        startStatusUpdates() {
-            setInterval(async () => {
-                await this.loadNumbers();
-            }, 10000);
-        },
+                        this.numbers.push(data.number);
+                        this.showAddModal = false;
+                        this.newNumber = { phoneNumber: '', name: '', description: '' };
 
-        async generateQR() {
-            this.generating = true;
-            try {
-                const response = await fetch('/api/numbers/connect/qr', {
-                    method: 'POST'
-                });
-                const { data } = await response.json();
-                this.qrCode = data.qrCode;
-                
-                // Start checking QR status
-                this.startQRCheck(data.sessionId);
-            } catch (error) {
-                console.error('Error generating QR:', error);
-            } finally {
-                this.generating = false;
-            }
-        },
-
-        startQRCheck(sessionId) {
-            this.qrCheckInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/numbers/qr-status/${sessionId}`);
-                    const { data } = await response.json();
-                    
-                    if (data.status === 'connected') {
-                        clearInterval(this.qrCheckInterval);
-                        this.showConnectionModal = false;
-                        this.qrCode = null;
-                        await this.loadNumbers();
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Number added successfully'
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error adding number'
+                        });
+                    } finally {
+                        this.loading = false;
                     }
-                } catch (error) {
-                    console.error('Error checking QR status:', error);
+                },
+
+                async connectNumber(number) {
+                    try {
+                        const response = await fetch(`/api/numbers/${number.id}/connect`, {
+                            method: 'POST'
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Connection initiated'
+                        });
+
+                        // Refresh page after 2 seconds to show QR code
+                        setTimeout(() => window.location.reload(), 2000);
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error connecting number'
+                        });
+                    }
+                },
+
+                async disconnectNumber(number) {
+                    try {
+                        const response = await fetch(`/api/numbers/${number.id}/disconnect`, {
+                            method: 'POST'
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        number.isConnected = false;
+
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Number disconnected successfully'
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error disconnecting number'
+                        });
+                    }
+                },
+
+                async deleteNumber(number) {
+                    if (!confirm('Are you sure you want to delete this number?')) {
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/numbers/${number.id}`, {
+                            method: 'DELETE'
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        this.numbers = this.numbers.filter(n => n.id !== number.id);
+
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Number deleted successfully'
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error deleting number'
+                        });
+                    }
                 }
-            }, 2000);
-        },
-
-        async connectWithPhone() {
-            this.connecting = true;
-            try {
-                const response = await fetch('/api/numbers/connect/phone', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phoneNumber: this.phoneNumber
-                    })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    this.showConnectionModal = false;
-                    this.phoneNumber = '';
-                    await this.loadNumbers();
-                }
-            } catch (error) {
-                console.error('Error connecting with phone:', error);
-            } finally {
-                this.connecting = false;
-            }
-        },
-
-        async disconnectNumber(id) {
-            try {
-                await fetch(`/api/numbers/disconnect/${id}`, {
-                    method: 'POST'
-                });
-                await this.loadNumbers();
-            } catch (error) {
-                console.error('Error disconnecting number:', error);
-            }
-        },
-
-        async removeNumber(id) {
-            if (!confirm('Are you sure you want to remove this number?')) return;
-            
-            try {
-                await fetch(`/api/numbers/remove/${id}`, {
-                    method: 'DELETE'
-                });
-                await this.loadNumbers();
-            } catch (error) {
-                console.error('Error removing number:', error);
-            }
-        },
-
-        startRename(number) {
-            this.currentNumber = number;
-            this.newName = number.name;
-            this.showRenameModal = true;
-        },
-
-        async renameNumber() {
-            try {
-                await fetch('/api/numbers/rename', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: this.currentNumber.id,
-                        name: this.newName
-                    })
-                });
-                
-                this.showRenameModal = false;
-                await this.loadNumbers();
-            } catch (error) {
-                console.error('Error renaming number:', error);
-            }
-        },
-
-        toggleNumber(id) {
-            const index = this.selectedNumbers.indexOf(id);
-            if (index === -1) {
-                this.selectedNumbers.push(id);
-            } else {
-                this.selectedNumbers.splice(index, 1);
-            }
-        },
-
-        toggleAllNumbers() {
-            if (this.selectedNumbers.length === this.numbers.length) {
-                this.selectedNumbers = [];
-            } else {
-                this.selectedNumbers = this.numbers.map(n => n.id);
-            }
-        },
-
-        async bulkDisconnect() {
-            if (!confirm('Are you sure you want to disconnect all selected numbers?')) return;
-            
-            try {
-                await fetch('/api/numbers/bulk', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'disconnect',
-                        ids: this.selectedNumbers
-                    })
-                });
-                
-                this.selectedNumbers = [];
-                this.showBulkActions = false;
-                await this.loadNumbers();
-            } catch (error) {
-                console.error('Error performing bulk disconnect:', error);
-            }
-        },
-
-        async bulkRemove() {
-            if (!confirm('Are you sure you want to remove all selected numbers?')) return;
-            
-            try {
-                await fetch('/api/numbers/bulk', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'remove',
-                        ids: this.selectedNumbers
-                    })
-                });
-                
-                this.selectedNumbers = [];
-                this.showBulkActions = false;
-                await this.loadNumbers();
-            } catch (error) {
-                console.error('Error performing bulk remove:', error);
-            }
-        },
-
-        formatDate(date) {
-            return new Date(date).toLocaleString();
+            };
         }
-    }
-}
-</script>
+    </script>
+</body>
+</html>
