@@ -1,151 +1,9 @@
+const config = require('../config/config');
 const Database = require('../utils/database');
 const logger = require('../utils/logger');
-const config = require('../config/config');
 const botManager = require('../bot/botManager');
 
 class DashboardController {
-    /**
-     * Get dashboard metrics and data
-     * @param {Object} req - Express request object
-     * @param {Object} res - Express response object
-     */
-    static async getDashboardData(req, res) {
-        try {
-            // Get connected numbers
-            const numbersData = await Database.read(config.paths.numbers);
-            const numbers = numbersData.numbers || [];
-
-            // Get bot settings
-            const settingsData = await Database.read(config.paths.settings);
-            const settings = settingsData.settings || {};
-
-            // Get active connections from bot manager
-            const activeConnections = await botManager.getConnections();
-
-            // Calculate metrics
-            const metrics = {
-                totalNumbers: numbers.length,
-                activeNumbers: activeConnections.filter(conn => conn.status === 'connected').length,
-                messagesToday: await this.getMessageCountForToday(),
-                responseRate: await this.calculateResponseRate(),
-                uptime: process.uptime(),
-                lastError: await this.getLastError()
-            };
-
-            // Get historical data for charts
-            const chartData = await this.getChartData();
-
-            return res.json({
-                success: true,
-                data: {
-                    metrics,
-                    numbers,
-                    settings,
-                    chartData
-                }
-            });
-        } catch (error) {
-            logger.error('Error getting dashboard data:', error);
-            return res.status(500).json({
-                error: 'Error fetching dashboard data'
-            });
-        }
-    }
-
-    /**
-     * Get message count for today
-     * @returns {Promise<number>}
-     */
-    static async getMessageCountForToday() {
-        try {
-            // This would typically query a message log or database
-            // For now, return a mock value
-            return Math.floor(Math.random() * 1000);
-        } catch (error) {
-            logger.error('Error getting message count:', error);
-            return 0;
-        }
-    }
-
-    /**
-     * Calculate response rate
-     * @returns {Promise<number>}
-     */
-    static async calculateResponseRate() {
-        try {
-            // This would typically calculate based on actual message logs
-            // For now, return a mock value between 90-100%
-            return 90 + Math.floor(Math.random() * 10);
-        } catch (error) {
-            logger.error('Error calculating response rate:', error);
-            return 0;
-        }
-    }
-
-    /**
-     * Get last error from logs
-     * @returns {Promise<Object|null>}
-     */
-    static async getLastError() {
-        try {
-            // This would typically get the last error from the error log
-            // For now, return null (no errors)
-            return null;
-        } catch (error) {
-            logger.error('Error getting last error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Get chart data for dashboard graphs
-     * @returns {Promise<Object>}
-     */
-    static async getChartData() {
-        try {
-            // Generate mock data for charts
-            const today = new Date();
-            const labels = Array.from({ length: 7 }, (_, i) => {
-                const date = new Date(today);
-                date.setDate(date.getDate() - (6 - i));
-                return date.toLocaleDateString('en-US', { weekday: 'short' });
-            });
-
-            return {
-                messageHistory: {
-                    labels,
-                    datasets: [{
-                        label: 'Messages Sent',
-                        data: Array.from({ length: 7 }, () => Math.floor(Math.random() * 1000)),
-                        borderColor: '#10B981',
-                        tension: 0.4
-                    }]
-                },
-                responseTime: {
-                    labels,
-                    datasets: [{
-                        label: 'Response Time (ms)',
-                        data: Array.from({ length: 7 }, () => Math.floor(Math.random() * 1000) + 500),
-                        borderColor: '#3B82F6',
-                        tension: 0.4
-                    }]
-                },
-                activeUsers: {
-                    labels,
-                    datasets: [{
-                        label: 'Active Users',
-                        data: Array.from({ length: 7 }, () => Math.floor(Math.random() * 100)),
-                        borderColor: '#8B5CF6',
-                        tension: 0.4
-                    }]
-                }
-            };
-        } catch (error) {
-            logger.error('Error generating chart data:', error);
-            return {};
-        }
-    }
-
     /**
      * Render dashboard page
      * @param {Object} req - Express request object
@@ -153,42 +11,239 @@ class DashboardController {
      */
     static async renderDashboard(req, res) {
         try {
+            // Get numbers data
+            const numbersData = await Database.read(config.paths.numbers);
+            const numbers = numbersData.numbers || [];
+
+            // Get active connections
+            const connections = botManager.getConnections();
+
+            // Calculate stats
+            const stats = {
+                total: numbers.length,
+                active: connections.length,
+                messagesReceived: numbers.reduce((sum, n) => sum + (n.stats?.received || 0), 0),
+                messagesSent: numbers.reduce((sum, n) => sum + (n.stats?.sent || 0), 0)
+            };
+
+            // Get recent activity
+            const activity = await DashboardController.getRecentActivity();
+
+            // Map connection status to numbers
+            const numbersWithStatus = numbers.map(number => ({
+                ...number,
+                isConnected: connections.includes(number.id),
+                qrCode: botManager.getQRCode(number.id)
+            }));
+
             res.render('dashboard', {
-                title: 'Dashboard',
-                user: req.session.user
+                user: req.session.user,
+                numbers: numbersWithStatus,
+                stats,
+                activity,
+                path: '/dashboard'
             });
         } catch (error) {
             logger.error('Error rendering dashboard:', error);
-            res.status(500).render('error', {
+            res.render('error', {
                 message: 'Error loading dashboard'
             });
         }
     }
 
     /**
-     * Get real-time updates for dashboard
+     * Get metrics for message volume
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
-    static async getRealTimeUpdates(req, res) {
+    static async getMessageVolume(req, res) {
         try {
-            const updates = {
-                activeConnections: await botManager.getConnections(),
-                messageCount: await this.getMessageCountForToday(),
-                responseRate: await this.calculateResponseRate(),
-                timestamp: new Date().toISOString()
-            };
+            const numbersData = await Database.read(config.paths.numbers);
+            const numbers = numbersData.numbers || [];
 
-            return res.json({
+            // Calculate hourly message volume for the last 24 hours
+            const now = new Date();
+            const hourlyData = Array(24).fill(0);
+
+            numbers.forEach(number => {
+                const messages = number.messages || [];
+                messages.forEach(msg => {
+                    const msgDate = new Date(msg.timestamp);
+                    if (now - msgDate <= 24 * 60 * 60 * 1000) { // Last 24 hours
+                        const hourIndex = 23 - Math.floor((now - msgDate) / (60 * 60 * 1000));
+                        if (hourIndex >= 0) {
+                            hourlyData[hourIndex]++;
+                        }
+                    }
+                });
+            });
+
+            res.json({
                 success: true,
-                data: updates
+                hourly: hourlyData
             });
         } catch (error) {
-            logger.error('Error getting real-time updates:', error);
-            return res.status(500).json({
-                error: 'Error fetching real-time updates'
+            logger.error('Error getting message volume:', error);
+            res.status(500).json({
+                error: 'Error getting message volume data'
             });
         }
+    }
+
+    /**
+     * Get metrics for response time
+     * @param {Object} req - Express request object
+     * @param {Object} res - Express response object
+     */
+    static async getResponseTime(req, res) {
+        try {
+            const numbersData = await Database.read(config.paths.numbers);
+            const numbers = numbersData.numbers || [];
+
+            // Calculate average response times for the last 24 hours
+            const now = new Date();
+            const data = [];
+
+            numbers.forEach(number => {
+                const messages = number.messages || [];
+                messages.forEach(msg => {
+                    if (msg.responseTime && now - new Date(msg.timestamp) <= 24 * 60 * 60 * 1000) {
+                        data.push([
+                            new Date(msg.timestamp).getTime(),
+                            msg.responseTime
+                        ]);
+                    }
+                });
+            });
+
+            // Sort by timestamp
+            data.sort((a, b) => a[0] - b[0]);
+
+            res.json({
+                success: true,
+                data
+            });
+        } catch (error) {
+            logger.error('Error getting response time:', error);
+            res.status(500).json({
+                error: 'Error getting response time data'
+            });
+        }
+    }
+
+    /**
+     * Get recent activity
+     * @returns {Promise<Array>} Recent activity items
+     */
+    static async getRecentActivity() {
+        try {
+            // Read audit log
+            const auditLog = await Database.read(config.logging.audit.filename);
+            const entries = auditLog.entries || [];
+
+            // Get last 10 relevant entries
+            return entries
+                .filter(entry => {
+                    // Filter relevant activity types
+                    const relevantTypes = ['whatsapp', 'number', 'message'];
+                    return relevantTypes.includes(entry.type);
+                })
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 10)
+                .map(entry => ({
+                    id: entry.id,
+                    type: entry.level === 'error' ? 'error' :
+                          entry.level === 'warn' ? 'warning' :
+                          entry.type === 'whatsapp' ? 'info' : 'success',
+                    message: entry.message,
+                    timestamp: entry.timestamp
+                }));
+        } catch (error) {
+            logger.error('Error getting recent activity:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get real-time updates
+     * @param {Object} req - Express request object
+     * @param {Object} res - Express response object
+     */
+    static async getUpdates(req, res) {
+        try {
+            // Set headers for SSE
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive'
+            });
+
+            // Send initial data
+            const initialData = await DashboardController.getCurrentState();
+            res.write(`data: ${JSON.stringify(initialData)}\n\n`);
+
+            // Set up event listeners
+            const updateClient = async (type, data) => {
+                res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+            };
+
+            // Listen for various events
+            botManager.on('connection', (numberId) => {
+                updateClient('connection', { numberId, status: 'connected' });
+            });
+
+            botManager.on('disconnection', (numberId) => {
+                updateClient('connection', { numberId, status: 'disconnected' });
+            });
+
+            botManager.on('message', async () => {
+                const stats = await DashboardController.getCurrentStats();
+                updateClient('stats', stats);
+            });
+
+            // Clean up on client disconnect
+            req.on('close', () => {
+                botManager.removeAllListeners();
+            });
+        } catch (error) {
+            logger.error('Error setting up updates:', error);
+            res.status(500).json({
+                error: 'Error setting up real-time updates'
+            });
+        }
+    }
+
+    /**
+     * Get current system state
+     * @returns {Promise<Object>} Current state
+     */
+    static async getCurrentState() {
+        const [stats, activity] = await Promise.all([
+            DashboardController.getCurrentStats(),
+            DashboardController.getRecentActivity()
+        ]);
+
+        return {
+            stats,
+            activity
+        };
+    }
+
+    /**
+     * Get current statistics
+     * @returns {Promise<Object>} Current statistics
+     */
+    static async getCurrentStats() {
+        const numbersData = await Database.read(config.paths.numbers);
+        const numbers = numbersData.numbers || [];
+        const connections = botManager.getConnections();
+
+        return {
+            total: numbers.length,
+            active: connections.length,
+            messagesReceived: numbers.reduce((sum, n) => sum + (n.stats?.received || 0), 0),
+            messagesSent: numbers.reduce((sum, n) => sum + (n.stats?.sent || 0), 0)
+        };
     }
 }
 
