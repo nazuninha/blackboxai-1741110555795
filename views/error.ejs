@@ -1,0 +1,101 @@
+<%- include('layout', { title: 'Error' }) %>
+
+<div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8 text-center">
+        <!-- Error Icon -->
+        <div class="mx-auto flex items-center justify-center h-24 w-24 rounded-full bg-red-100 dark:bg-red-900">
+            <i class="fas fa-exclamation-triangle text-4xl text-red-600 dark:text-red-400"></i>
+        </div>
+
+        <!-- Error Message -->
+        <div>
+            <h2 class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                <%= typeof error !== 'undefined' ? error.status || 500 : 500 %>
+            </h2>
+            <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">
+                <%= typeof message !== 'undefined' ? message : 'An unexpected error occurred' %>
+            </p>
+            <% if (process.env.NODE_ENV === 'development' && typeof error !== 'undefined' && error.stack) { %>
+                <div class="mt-4 p-4 bg-gray-100 dark:bg-gray-900 rounded-lg overflow-auto">
+                    <pre class="text-left text-sm text-gray-700 dark:text-gray-300"><%= error.stack %></pre>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-8 space-x-4">
+            <button 
+                onclick="window.history.back()"
+                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+                <i class="fas fa-arrow-left mr-2"></i>
+                Go Back
+            </button>
+            <a 
+                href="/dashboard"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+            >
+                <i class="fas fa-home mr-2"></i>
+                Dashboard
+            </a>
+        </div>
+
+        <!-- Additional Help -->
+        <div class="mt-8">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                If this error persists, please try:
+            </p>
+            <ul class="mt-2 text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                <li>• Refreshing the page</li>
+                <li>• Clearing your browser cache</li>
+                <li>• Checking your internet connection</li>
+                <li>• Logging out and back in</li>
+            </ul>
+        </div>
+
+        <!-- Support Contact -->
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Need help? Contact support at
+                <a href="mailto:support@example.com" class="text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300">
+                    support@example.com
+                </a>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-sm text-gray-500 dark:text-gray-400">
+            Developed by hiudy
+        </div>
+    </div>
+</div>
+
+<!-- Refresh Button (Fixed Position) -->
+<div class="fixed bottom-8 right-8">
+    <button 
+        onclick="window.location.reload()"
+        class="p-4 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:shadow-xl transition-shadow duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        title="Refresh Page"
+    >
+        <i class="fas fa-redo-alt text-gray-600 dark:text-gray-400"></i>
+    </button>
+</div>
+
+<script>
+// Add smooth transitions when showing error details
+document.addEventListener('DOMContentLoaded', () => {
+    const errorDetails = document.querySelector('pre');
+    if (errorDetails) {
+        errorDetails.style.maxHeight = '300px';
+        errorDetails.style.transition = 'max-height 0.3s ease-in-out';
+        
+        errorDetails.addEventListener('click', () => {
+            if (errorDetails.style.maxHeight === '300px') {
+                errorDetails.style.maxHeight = errorDetails.scrollHeight + 'px';
+            } else {
+                errorDetails.style.maxHeight = '300px';
+            }
+        });
+    }
+});
+</script>
