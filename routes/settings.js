@@ -1,128 +1,139 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const SettingsController = require('../controllers/settingsController');
 const AuthController = require('../controllers/authController');
+const { apiLimiter } = require('../utils/rateLimiter');
 
-// Apply authentication middleware to all settings routes
+// Configure multer for file uploads
+const upload = multer({
+    limits: {
+        fileSize: 1024 * 1024 // 1MB limit
+    }
+});
+
+// Apply authentication middleware to all routes
 router.use(AuthController.isAuthenticated);
 
-// Main settings page
-router.get('/settings', SettingsController.renderSettingsPage);
+// Apply rate limiting to API endpoints
+router.use('/api', apiLimiter);
 
-// Get current settings
-router.get('/api/settings', SettingsController.getSettings);
+// Settings page
+router.get('/settings', SettingsController.renderSettings);
 
 // Update settings
 router.put('/api/settings', SettingsController.updateSettings);
 
-// Reset settings to defaults
-router.post('/api/settings/reset', AuthController.isAdmin, SettingsController.resetSettings);
+// Message templates
+router.post('/api/settings/templates', SettingsController.addTemplate);
+router.put('/api/settings/templates/:id', SettingsController.updateTemplate);
+router.delete('/api/settings/templates/:id', SettingsController.deleteTemplate);
 
-// Export settings (Admin only)
+// Export/Import settings (admin only)
 router.get('/api/settings/export', AuthController.isAdmin, SettingsController.exportSettings);
-
-// Import settings (Admin only)
-router.post('/api/settings/import', AuthController.isAdmin, SettingsController.importSettings);
-
-// Update specific setting groups
-router.put('/api/settings/response-delay', async (req, res) => {
-    try {
-        const { min, max } = req.body;
-        await SettingsController.updateSettings(req, {
-            ...res,
-            body: {
-                responseDelay: { min, max }
+router.post('/api/settings/import', 
+    AuthController.isAdmin,
+    upload.single('settings'),
+    async (req, res, next) => {
+        try {
+            // Parse JSON file
+            if (!req.file || !req.file.buffer) {
+                return res.status(400).json({
+                    error: 'No file uploaded'
+                });
             }
-        });
-    } catch (error) {
-        res.status(500).json({
-            error: 'Error updating response delay settings'
-        });
-    }
-});
 
-router.put('/api/settings/working-hours', async (req, res) => {
-    try {
-        const { start, end, timezone } = req.body;
-        await SettingsController.updateSettings(req, {
-            ...res,
-            body: {
-                workingHours: { start, end, timezone }
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            error: 'Error updating working hours settings'
-        });
-    }
-});
-
-router.put('/api/settings/message-templates', async (req, res) => {
-    try {
-        const { templates } = req.body;
-        await SettingsController.updateSettings(req, {
-            ...res,
-            body: {
-                messageTemplates: templates
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            error: 'Error updating message templates'
-        });
-    }
-});
-
-router.put('/api/settings/absence-message', async (req, res) => {
-    try {
-        const { message } = req.body;
-        await SettingsController.updateSettings(req, {
-            ...res,
-            body: {
-                absenceMessage: message
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            error: 'Error updating absence message'
-        });
-    }
-});
-
-// Toggle features
-router.post('/api/settings/toggle/:feature', async (req, res) => {
-    try {
-        const { feature } = req.params;
-        const { enabled } = req.body;
-
-        // Validate feature
-        const validFeatures = ['autoRead', 'autoReply', 'workingHours'];
-        if (!validFeatures.includes(feature)) {
-            return res.status(400).json({
-                error: 'Invalid feature'
+            const settings = JSON.parse(req.file.buffer.toString());
+            req.body = settings;
+            next();
+        } catch (error) {
+            res.status(400).json({
+                error: 'Invalid JSON file'
             });
         }
+    },
+    SettingsController.importSettings
+);
 
-        await SettingsController.updateSettings(req, {
-            ...res,
-            body: {
-                [feature]: enabled
+// Bulk operations (admin only)
+router.post('/api/settings/templates/bulk', AuthController.isAdmin, async (req, res) => {
+    try {
+        const { templates } = req.body;
+        const results = [];
+
+        for (const template of templates) {
+            try {
+                const result = await SettingsController.addTemplate({
+                    body: template,
+                    session: req.session
+                }, {
+                    json: (data) => results.push({ ...data, templateName: template.name })
+                });
+            } catch (error) {
+                results.push({
+                    success: false,
+                    error: error.message,
+                    templateName: template.name
+                });
             }
+        }
+
+        res.json({
+            success: true,
+            results
         });
     } catch (error) {
         res.status(500).json({
-            error: `Error toggling ${feature}`
+            error: 'Error performing bulk template operation'
         });
     }
 });
 
-// Validate settings
-router.post('/api/settings/validate', (req, res) => {
-    const error = SettingsController.validateSettings(req.body);
-    if (error) {
-        return res.status(400).json({ error });
+router.delete('/api/settings/templates/bulk', AuthController.isAdmin, async (req, res) => {
+    try {
+        const { ids } = req.body;
+        const results = [];
+
+        for (const id of ids) {
+            try {
+                await SettingsController.deleteTemplate({
+                    params: { id },
+                    session: req.session
+                }, {
+                    json: (data) => results.push({ ...data, templateId: id })
+                });
+            } catch (error) {
+                results.push({
+                    success: false,
+                    error: error.message,
+                    templateId: id
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            results
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error performing bulk template deletion'
+        });
     }
-    res.json({ valid: true });
+});
+
+// Reset settings to defaults (admin only)
+router.post('/api/settings/reset', AuthController.isAdmin, async (req, res) => {
+    try {
+        await SettingsController.updateSettings({
+            body: config.botDefaults,
+            session: req.session
+        }, res);
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error resetting settings'
+        });
+    }
 });
 
 module.exports = router;
