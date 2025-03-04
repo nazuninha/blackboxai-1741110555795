@@ -33,131 +33,14 @@ class Database {
             // Ensure directory exists
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             
-            // Write data with pretty formatting
-            await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+            // Write data
+            await fs.writeFile(
+                filePath,
+                JSON.stringify(data, null, 2),
+                'utf8'
+            );
         } catch (error) {
-            logger.error(`Error writing to file ${filePath}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Update specific fields in a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @param {Object} updates - Object containing fields to update
-     * @returns {Promise<Object>} Updated data
-     */
-    static async update(filePath, updates) {
-        try {
-            const data = await this.read(filePath);
-            const updatedData = { ...data, ...updates };
-            await this.write(filePath, updatedData);
-            return updatedData;
-        } catch (error) {
-            logger.error(`Error updating file ${filePath}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Delete a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @returns {Promise<void>}
-     */
-    static async delete(filePath) {
-        try {
-            await fs.unlink(filePath);
-        } catch (error) {
-            if (error.code !== 'ENOENT') {
-                logger.error(`Error deleting file ${filePath}:`, error);
-                throw error;
-            }
-        }
-    }
-
-    /**
-     * Add an item to an array in a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @param {string} arrayField - Name of the array field
-     * @param {Object} item - Item to add
-     * @returns {Promise<Object>} Updated data
-     */
-    static async addToArray(filePath, arrayField, item) {
-        try {
-            const data = await this.read(filePath);
-            if (!Array.isArray(data[arrayField])) {
-                data[arrayField] = [];
-            }
-            data[arrayField].push(item);
-            await this.write(filePath, data);
-            return data;
-        } catch (error) {
-            logger.error(`Error adding item to array in ${filePath}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Remove an item from an array in a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @param {string} arrayField - Name of the array field
-     * @param {function} predicate - Function to identify item to remove
-     * @returns {Promise<Object>} Updated data
-     */
-    static async removeFromArray(filePath, arrayField, predicate) {
-        try {
-            const data = await this.read(filePath);
-            if (Array.isArray(data[arrayField])) {
-                data[arrayField] = data[arrayField].filter(item => !predicate(item));
-                await this.write(filePath, data);
-            }
-            return data;
-        } catch (error) {
-            logger.error(`Error removing item from array in ${filePath}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Update an item in an array in a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @param {string} arrayField - Name of the array field
-     * @param {function} predicate - Function to identify item to update
-     * @param {Object} updates - Updates to apply to the item
-     * @returns {Promise<Object>} Updated data
-     */
-    static async updateInArray(filePath, arrayField, predicate, updates) {
-        try {
-            const data = await this.read(filePath);
-            if (Array.isArray(data[arrayField])) {
-                data[arrayField] = data[arrayField].map(item => 
-                    predicate(item) ? { ...item, ...updates } : item
-                );
-                await this.write(filePath, data);
-            }
-            return data;
-        } catch (error) {
-            logger.error(`Error updating item in array in ${filePath}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Find items in an array in a JSON file
-     * @param {string} filePath - Path to the JSON file
-     * @param {string} arrayField - Name of the array field
-     * @param {function} predicate - Function to filter items
-     * @returns {Promise<Array>} Matching items
-     */
-    static async findInArray(filePath, arrayField, predicate) {
-        try {
-            const data = await this.read(filePath);
-            if (Array.isArray(data[arrayField])) {
-                return data[arrayField].filter(predicate);
-            }
-            return [];
-        } catch (error) {
-            logger.error(`Error finding items in array in ${filePath}:`, error);
+            logger.error(`Error writing file ${filePath}:`, error);
             throw error;
         }
     }
@@ -165,7 +48,7 @@ class Database {
     /**
      * Check if a file exists
      * @param {string} filePath - Path to the file
-     * @returns {Promise<boolean>} Whether the file exists
+     * @returns {Promise<boolean>} True if file exists
      */
     static async exists(filePath) {
         try {
@@ -177,19 +60,148 @@ class Database {
     }
 
     /**
-     * Initialize a JSON file with default data if it doesn't exist
+     * Add an item to an array in a JSON file
      * @param {string} filePath - Path to the JSON file
-     * @param {Object} defaultData - Default data to write
+     * @param {string} arrayKey - Key of the array in the JSON object
+     * @param {Object} item - Item to add
      * @returns {Promise<void>}
      */
-    static async initialize(filePath, defaultData) {
+    static async addToArray(filePath, arrayKey, item) {
+        const data = await this.read(filePath);
+        if (!data[arrayKey]) {
+            data[arrayKey] = [];
+        }
+        data[arrayKey].push(item);
+        await this.write(filePath, data);
+    }
+
+    /**
+     * Update items in an array in a JSON file
+     * @param {string} filePath - Path to the JSON file
+     * @param {string} arrayKey - Key of the array in the JSON object
+     * @param {Function} predicate - Function to find items to update
+     * @param {Object} updates - Updates to apply
+     * @returns {Promise<void>}
+     */
+    static async updateInArray(filePath, arrayKey, predicate, updates) {
+        const data = await this.read(filePath);
+        if (!data[arrayKey]) {
+            data[arrayKey] = [];
+        }
+        data[arrayKey] = data[arrayKey].map(item => 
+            predicate(item) ? { ...item, ...updates } : item
+        );
+        await this.write(filePath, data);
+    }
+
+    /**
+     * Remove items from an array in a JSON file
+     * @param {string} filePath - Path to the JSON file
+     * @param {string} arrayKey - Key of the array in the JSON object
+     * @param {Function} predicate - Function to find items to remove
+     * @returns {Promise<void>}
+     */
+    static async removeFromArray(filePath, arrayKey, predicate) {
+        const data = await this.read(filePath);
+        if (!data[arrayKey]) {
+            data[arrayKey] = [];
+        }
+        data[arrayKey] = data[arrayKey].filter(item => !predicate(item));
+        await this.write(filePath, data);
+    }
+
+    /**
+     * Find items in an array in a JSON file
+     * @param {string} filePath - Path to the JSON file
+     * @param {string} arrayKey - Key of the array in the JSON object
+     * @param {Function} predicate - Function to find items
+     * @returns {Promise<Array>} Found items
+     */
+    static async findInArray(filePath, arrayKey, predicate) {
+        const data = await this.read(filePath);
+        if (!data[arrayKey]) {
+            return [];
+        }
+        return data[arrayKey].filter(predicate);
+    }
+
+    /**
+     * Find one item in an array in a JSON file
+     * @param {string} filePath - Path to the JSON file
+     * @param {string} arrayKey - Key of the array in the JSON object
+     * @param {Function} predicate - Function to find the item
+     * @returns {Promise<Object|null>} Found item or null
+     */
+    static async findOneInArray(filePath, arrayKey, predicate) {
+        const data = await this.read(filePath);
+        if (!data[arrayKey]) {
+            return null;
+        }
+        return data[arrayKey].find(predicate) || null;
+    }
+
+    /**
+     * Backup a JSON file
+     * @param {string} filePath - Path to the JSON file
+     * @returns {Promise<string>} Backup file path
+     */
+    static async backup(filePath) {
         try {
-            const exists = await this.exists(filePath);
-            if (!exists) {
-                await this.write(filePath, defaultData);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const backupPath = `${filePath}.${timestamp}.backup`;
+            
+            await fs.copyFile(filePath, backupPath);
+            logger.info(`Created backup: ${backupPath}`);
+            
+            return backupPath;
+        } catch (error) {
+            logger.error(`Error creating backup for ${filePath}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Restore from a backup file
+     * @param {string} backupPath - Path to the backup file
+     * @param {string} targetPath - Path to restore to
+     * @returns {Promise<void>}
+     */
+    static async restore(backupPath, targetPath) {
+        try {
+            await fs.copyFile(backupPath, targetPath);
+            logger.info(`Restored from backup: ${backupPath}`);
+        } catch (error) {
+            logger.error(`Error restoring from backup ${backupPath}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Clean up old backup files
+     * @param {string} directory - Directory containing backup files
+     * @param {number} maxAge - Maximum age in days
+     * @returns {Promise<void>}
+     */
+    static async cleanBackups(directory, maxAge) {
+        try {
+            const files = await fs.readdir(directory);
+            const now = Date.now();
+            const maxAgeMs = maxAge * 24 * 60 * 60 * 1000;
+
+            for (const file of files) {
+                if (file.endsWith('.backup')) {
+                    const filePath = path.join(directory, file);
+                    const stats = await fs.stat(filePath);
+                    const age = now - stats.mtime.getTime();
+
+                    if (age > maxAgeMs) {
+                        await fs.unlink(filePath);
+                        logger.info(`Deleted old backup: ${filePath}`);
+                    }
+                }
             }
         } catch (error) {
-            logger.error(`Error initializing file ${filePath}:`, error);
+            logger.error(`Error cleaning backups in ${directory}:`, error);
             throw error;
         }
     }
