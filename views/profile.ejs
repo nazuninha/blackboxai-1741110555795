@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Profile' }) %>
+<body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="{ 'dark': darkMode }">
+    <%- include('partials/nav', { path: '/profile', user: locals.user }) %>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="profileManager()">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account settings and preferences</p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <!-- Profile Information -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-6">Profile Information</h3>
+                    <form @submit.prevent="updateProfile">
+                        <!-- Avatar -->
+                        <div class="flex items-center mb-6">
+                            <div class="relative">
+                                <img 
+                                    :src="avatar || defaultAvatar"
+                                    class="h-20 w-20 rounded-full object-cover"
+                                    alt="Profile avatar"
+                                >
+                                <label 
+                                    class="absolute bottom-0 right-0 bg-green-600 rounded-full p-2 cursor-pointer hover:bg-green-700 transition-colors"
+                                    for="avatar-upload"
+                                >
+                                    <i class="fas fa-camera text-white text-sm"></i>
+                                </label>
+                                <input 
+                                    type="file" 
+                                    id="avatar-upload" 
+                                    class="hidden" 
+                                    accept="image/*"
+                                    @change="uploadAvatar"
+                                >
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">Profile Photo</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">JPG or PNG, max 1MB</p>
+                            </div>
+                        </div>
+
+                        <!-- Name -->
+                        <div class="mb-4">
+                            <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Name
+                            </label>
+                            <input 
+                                type="text" 
+                                id="name" 
+                                x-model="form.name"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                                required
+                            >
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-4">
+                            <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Email
+                            </label>
+                            <input 
+                                type="email" 
+                                id="email" 
+                                x-model="form.email"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                                required
+                            >
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="flex justify-end">
+                            <button 
+                                type="submit"
+                                :disabled="loading"
+                                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                            >
+                                <i class="fas fa-save mr-2"></i>
+                                Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Change Password -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-6">Change Password</h3>
+                    <form @submit.prevent="updatePassword">
+                        <!-- Current Password -->
+                        <div class="mb-4">
+                            <label for="current-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Current Password
+                            </label>
+                            <input 
+                                type="password" 
+                                id="current-password" 
+                                x-model="passwordForm.current"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                                required
+                            >
+                        </div>
+
+                        <!-- New Password -->
+                        <div class="mb-4">
+                            <label for="new-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                New Password
+                            </label>
+                            <input 
+                                type="password" 
+                                id="new-password" 
+                                x-model="passwordForm.new"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                                required
+                                minlength="8"
+                            >
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="mb-4">
+                            <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Confirm New Password
+                            </label>
+                            <input 
+                                type="password" 
+                                id="confirm-password" 
+                                x-model="passwordForm.confirm"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                                required
+                            >
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="flex justify-end">
+                            <button 
+                                type="submit"
+                                :disabled="loading || passwordForm.new !== passwordForm.confirm"
+                                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                            >
+                                <i class="fas fa-key mr-2"></i>
+                                Update Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function profileManager() {
+            return {
+                loading: false,
+                avatar: '<%= user.avatar %>',
+                defaultAvatar: 'https://ui-avatars.com/api/?name=<%= encodeURIComponent(user.name) %>',
+                form: {
+                    name: '<%= user.name %>',
+                    email: '<%= user.email %>'
+                },
+                passwordForm: {
+                    current: '',
+                    new: '',
+                    confirm: ''
+                },
+
+                async uploadAvatar(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    if (file.size > 1024 * 1024) {
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: 'File size must be less than 1MB'
+                        });
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('avatar', file);
+
+                    try {
+                        const response = await fetch('/api/profile/avatar', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        this.avatar = data.avatar;
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Avatar updated successfully'
+                        });
+                    } catch (error) {
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error updating avatar'
+                        });
+                    }
+                },
+
+                async updateProfile() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/profile', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.form)
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Profile updated successfully'
+                        });
+                    } catch (error) {
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error updating profile'
+                        });
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async updatePassword() {
+                    if (this.passwordForm.new !== this.passwordForm.confirm) {
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: 'Passwords do not match'
+                        });
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/profile', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                currentPassword: this.passwordForm.current,
+                                newPassword: this.passwordForm.new
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        // Clear password form
+                        this.passwordForm = {
+                            current: '',
+                            new: '',
+                            confirm: ''
+                        };
+
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Password updated successfully'
+                        });
+                    } catch (error) {
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error updating password'
+                        });
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>
