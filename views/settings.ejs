@@ -1,0 +1,362 @@
+<%- include('layout', { title: 'Bot Settings' }) %>
+
+<div class="container mx-auto" x-data="settings()">
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Bot Settings</h1>
+            <p class="text-gray-600 dark:text-gray-400">Configure your WhatsApp bot behavior and preferences</p>
+        </div>
+        <div class="flex space-x-4">
+            <!-- Reset Button (Admin Only) -->
+            <button 
+                @click="resetSettings"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+            >
+                <i class="fas fa-undo mr-2"></i>
+                Reset to Defaults
+            </button>
+            
+            <!-- Save Button -->
+            <button 
+                @click="saveSettings"
+                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                :disabled="saving"
+            >
+                <template x-if="!saving">
+                    <i class="fas fa-save mr-2"></i>
+                </template>
+                <template x-if="saving">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                </template>
+                <span x-text="saving ? 'Saving...' : 'Save Changes'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Response Delay -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Response Delay</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Minimum Delay (ms)
+                    </label>
+                    <input 
+                        type="number" 
+                        x-model="settings.responseDelay.min"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        min="0"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Maximum Delay (ms)
+                    </label>
+                    <input 
+                        type="number" 
+                        x-model="settings.responseDelay.max"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        min="0"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto Read Settings -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Message Handling</h3>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Auto Read Messages
+                    </span>
+                    <button 
+                        type="button"
+                        class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        :class="settings.autoRead ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
+                        @click="settings.autoRead = !settings.autoRead"
+                    >
+                        <span 
+                            class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
+                            :class="settings.autoRead ? 'translate-x-5' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Auto Reply
+                    </span>
+                    <button 
+                        type="button"
+                        class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        :class="settings.autoReply ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
+                        @click="settings.autoReply = !settings.autoReply"
+                    >
+                        <span 
+                            class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
+                            :class="settings.autoReply ? 'translate-x-5' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Working Hours -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Working Hours</h3>
+                <button 
+                    type="button"
+                    class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    :class="settings.workingHours.enabled ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
+                    @click="settings.workingHours.enabled = !settings.workingHours.enabled"
+                >
+                    <span 
+                        class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
+                        :class="settings.workingHours.enabled ? 'translate-x-5' : 'translate-x-0'"
+                    ></span>
+                </button>
+            </div>
+            <div class="space-y-4" x-show="settings.workingHours.enabled">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Start Time
+                        </label>
+                        <input 
+                            type="time" 
+                            x-model="settings.workingHours.start"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            End Time
+                        </label>
+                        <input 
+                            type="time" 
+                            x-model="settings.workingHours.end"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Timezone
+                    </label>
+                    <select 
+                        x-model="settings.workingHours.timezone"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <template x-for="tz in timezones" :key="tz">
+                            <option :value="tz" x-text="tz"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Templates -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Message Templates</h3>
+                <button 
+                    @click="addTemplate"
+                    class="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                    <i class="fas fa-plus mr-2"></i>
+                    Add Template
+                </button>
+            </div>
+            <div class="space-y-4">
+                <template x-for="(template, index) in settings.messageTemplates" :key="index">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <input 
+                                type="text" 
+                                x-model="template.name"
+                                placeholder="Template Name"
+                                class="block w-2/3 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            >
+                            <button 
+                                @click="removeTemplate(index)"
+                                class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <textarea 
+                            x-model="template.content"
+                            rows="3"
+                            placeholder="Template Content"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        ></textarea>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Absence Message -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Absence Message</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Message when outside working hours
+                    </label>
+                    <textarea 
+                        x-model="settings.absenceMessage"
+                        rows="4"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="We're currently outside our working hours. We'll get back to you as soon as possible."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inactivity Timeout -->
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Inactivity Settings</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Inactivity Timeout (seconds)
+                    </label>
+                    <input 
+                        type="number" 
+                        x-model="settings.inactivityTimeout"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        min="0"
+                    >
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        Time before automatically ending a conversation due to inactivity
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function settings() {
+    return {
+        settings: {
+            responseDelay: {
+                min: 1000,
+                max: 3000
+            },
+            autoRead: true,
+            autoReply: true,
+            workingHours: {
+                enabled: false,
+                start: '09:00',
+                end: '17:00',
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            messageTemplates: [],
+            absenceMessage: '',
+            inactivityTimeout: 3600
+        },
+        saving: false,
+        timezones: Intl.supportedValuesOf('timeZone'),
+
+        async init() {
+            await this.loadSettings();
+        },
+
+        async loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const { data } = await response.json();
+                this.settings = {
+                    ...this.settings,
+                    ...data
+                };
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        },
+
+        async saveSettings() {
+            this.saving = true;
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.settings)
+                });
+
+                const { success, error } = await response.json();
+                
+                if (success) {
+                    // Show success notification
+                    window.dispatchEvent(new CustomEvent('notify', {
+                        detail: {
+                            message: 'Settings saved successfully',
+                            type: 'success'
+                        }
+                    }));
+                } else {
+                    throw new Error(error);
+                }
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                // Show error notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: {
+                        message: 'Error saving settings: ' + error.message,
+                        type: 'error'
+                    }
+                }));
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async resetSettings() {
+            if (!confirm('Are you sure you want to reset all settings to defaults?')) return;
+
+            try {
+                const response = await fetch('/api/settings/reset', {
+                    method: 'POST'
+                });
+                const { data } = await response.json();
+                this.settings = data;
+
+                // Show success notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: {
+                        message: 'Settings reset to defaults',
+                        type: 'success'
+                    }
+                }));
+            } catch (error) {
+                console.error('Error resetting settings:', error);
+                // Show error notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: {
+                        message: 'Error resetting settings',
+                        type: 'error'
+                    }
+                }));
+            }
+        },
+
+        addTemplate() {
+            this.settings.messageTemplates.push({
+                name: '',
+                content: ''
+            });
+        },
+
+        removeTemplate(index) {
+            this.settings.messageTemplates.splice(index, 1);
+        }
+    }
+}
+</script>
