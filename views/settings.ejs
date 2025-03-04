@@ -1,362 +1,443 @@
-<%- include('layout', { title: 'Bot Settings' }) %>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Settings' }) %>
+<body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="{ 'dark': darkMode }">
+    <%- include('partials/nav', { path: '/settings', user: locals.user }) %>
 
-<div class="container mx-auto" x-data="settings()">
-    <!-- Header -->
-    <div class="mb-8 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Bot Settings</h1>
-            <p class="text-gray-600 dark:text-gray-400">Configure your WhatsApp bot behavior and preferences</p>
-        </div>
-        <div class="flex space-x-4">
-            <!-- Reset Button (Admin Only) -->
-            <button 
-                @click="resetSettings"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-            >
-                <i class="fas fa-undo mr-2"></i>
-                Reset to Defaults
-            </button>
-            
-            <!-- Save Button -->
-            <button 
-                @click="saveSettings"
-                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                :disabled="saving"
-            >
-                <template x-if="!saving">
-                    <i class="fas fa-save mr-2"></i>
-                </template>
-                <template x-if="saving">
-                    <i class="fas fa-spinner fa-spin mr-2"></i>
-                </template>
-                <span x-text="saving ? 'Saving...' : 'Save Changes'"></span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Settings Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Response Delay -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Response Delay</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Minimum Delay (ms)
-                    </label>
-                    <input 
-                        type="number" 
-                        x-model="settings.responseDelay.min"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        min="0"
-                    >
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Maximum Delay (ms)
-                    </label>
-                    <input 
-                        type="number" 
-                        x-model="settings.responseDelay.max"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        min="0"
-                    >
-                </div>
-            </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="settingsManager()">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Configure your WhatsApp bot behavior</p>
         </div>
 
-        <!-- Auto Read Settings -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Message Handling</h3>
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Auto Read Messages
-                    </span>
-                    <button 
-                        type="button"
-                        class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        :class="settings.autoRead ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
-                        @click="settings.autoRead = !settings.autoRead"
-                    >
-                        <span 
-                            class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
-                            :class="settings.autoRead ? 'translate-x-5' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Auto Reply
-                    </span>
-                    <button 
-                        type="button"
-                        class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        :class="settings.autoReply ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
-                        @click="settings.autoReply = !settings.autoReply"
-                    >
-                        <span 
-                            class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
-                            :class="settings.autoReply ? 'translate-x-5' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Working Hours -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Working Hours</h3>
-                <button 
-                    type="button"
-                    class="relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    :class="settings.workingHours.enabled ? 'bg-green-600' : 'bg-gray-200 dark:bg-gray-700'"
-                    @click="settings.workingHours.enabled = !settings.workingHours.enabled"
-                >
-                    <span 
-                        class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200"
-                        :class="settings.workingHours.enabled ? 'translate-x-5' : 'translate-x-0'"
-                    ></span>
-                </button>
-            </div>
-            <div class="space-y-4" x-show="settings.workingHours.enabled">
-                <div class="grid grid-cols-2 gap-4">
+        <!-- Settings Form -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <form @submit.prevent="saveSettings">
+                    <!-- General Settings -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Start Time
-                        </label>
-                        <input 
-                            type="time" 
-                            x-model="settings.workingHours.start"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            End Time
-                        </label>
-                        <input 
-                            type="time" 
-                            x-model="settings.workingHours.end"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Timezone
-                    </label>
-                    <select 
-                        x-model="settings.workingHours.timezone"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    >
-                        <template x-for="tz in timezones" :key="tz">
-                            <option :value="tz" x-text="tz"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-        </div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">General Settings</h3>
+                        <div class="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                            <!-- Auto Reply -->
+                            <div class="sm:col-span-4">
+                                <div class="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        id="autoReply" 
+                                        x-model="settings.autoReply.enabled"
+                                        class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                                    >
+                                    <label for="autoReply" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                                        Enable Auto Reply
+                                    </label>
+                                </div>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Automatically respond to incoming messages
+                                </p>
+                            </div>
 
-        <!-- Message Templates -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Message Templates</h3>
-                <button 
-                    @click="addTemplate"
-                    class="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                    <i class="fas fa-plus mr-2"></i>
-                    Add Template
-                </button>
-            </div>
-            <div class="space-y-4">
-                <template x-for="(template, index) in settings.messageTemplates" :key="index">
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-md p-4">
-                        <div class="flex justify-between items-start mb-2">
-                            <input 
-                                type="text" 
-                                x-model="template.name"
-                                placeholder="Template Name"
-                                class="block w-2/3 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            >
+                            <!-- Working Hours -->
+                            <div class="sm:col-span-6">
+                                <div class="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        id="workingHours" 
+                                        x-model="settings.workingHours.enabled"
+                                        class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                                    >
+                                    <label for="workingHours" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                                        Enable Working Hours
+                                    </label>
+                                </div>
+                                <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2" x-show="settings.workingHours.enabled">
+                                    <div>
+                                        <label for="workingHoursStart" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Start Time
+                                        </label>
+                                        <input 
+                                            type="time" 
+                                            id="workingHoursStart" 
+                                            x-model="settings.workingHours.start"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label for="workingHoursEnd" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            End Time
+                                        </label>
+                                        <input 
+                                            type="time" 
+                                            id="workingHoursEnd" 
+                                            x-model="settings.workingHours.end"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Response Delay -->
+                            <div class="sm:col-span-6">
+                                <label for="responseDelay" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Response Delay (seconds)
+                                </label>
+                                <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label for="responseDelayMin" class="block text-sm text-gray-500 dark:text-gray-400">
+                                            Minimum
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            id="responseDelayMin" 
+                                            x-model.number="settings.responseDelay.min"
+                                            min="0"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label for="responseDelayMax" class="block text-sm text-gray-500 dark:text-gray-400">
+                                            Maximum
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            id="responseDelayMax" 
+                                            x-model.number="settings.responseDelay.max"
+                                            min="0"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Message Templates -->
+                    <div class="mt-8">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Message Templates</h3>
                             <button 
-                                @click="removeTemplate(index)"
-                                class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                type="button"
+                                @click="showAddTemplateModal = true"
+                                class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             >
-                                <i class="fas fa-trash"></i>
+                                <i class="fas fa-plus mr-2"></i>
+                                Add Template
                             </button>
                         </div>
-                        <textarea 
-                            x-model="template.content"
-                            rows="3"
-                            placeholder="Template Content"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        ></textarea>
+
+                        <div class="mt-4 -mx-4 sm:-mx-6 lg:-mx-8">
+                            <div class="inline-block min-w-full py-2 align-middle">
+                                <div class="shadow-sm ring-1 ring-black ring-opacity-5">
+                                    <table class="min-w-full border-separate" style="border-spacing: 0">
+                                        <thead class="bg-gray-50 dark:bg-gray-700">
+                                            <tr>
+                                                <th scope="col" class="sticky top-0 border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Name</th>
+                                                <th scope="col" class="sticky top-0 border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Trigger</th>
+                                                <th scope="col" class="sticky top-0 border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Content</th>
+                                                <th scope="col" class="sticky top-0 border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white dark:bg-gray-800">
+                                            <template x-for="template in settings.messageTemplates" :key="template.id">
+                                                <tr>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white" x-text="template.name"></td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="template.trigger || '-'"></td>
+                                                    <td class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                        <div class="max-w-xs truncate" x-text="template.content"></div>
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-right">
+                                                        <button 
+                                                            type="button" 
+                                                            @click="editTemplate(template)"
+                                                            class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3"
+                                                        >
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            @click="deleteTemplate(template)"
+                                                            class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                        >
+                                                            <i class="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="!settings.messageTemplates?.length">
+                                                <td colspan="4" class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                                                    No message templates found
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </template>
+
+                    <!-- Save Button -->
+                    <div class="mt-8 flex justify-end">
+                        <button 
+                            type="submit"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            :disabled="loading"
+                        >
+                            <template x-if="!loading">
+                                <i class="fas fa-save mr-2"></i>
+                            </template>
+                            <template x-if="loading">
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </template>
+                            <span x-text="loading ? 'Saving...' : 'Save Settings'"></span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 
-        <!-- Absence Message -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Absence Message</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Message when outside working hours
-                    </label>
-                    <textarea 
-                        x-model="settings.absenceMessage"
-                        rows="4"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        placeholder="We're currently outside our working hours. We'll get back to you as soon as possible."
-                    ></textarea>
-                </div>
-            </div>
-        </div>
+        <!-- Template Modal -->
+        <div 
+            x-show="showAddTemplateModal || editingTemplate" 
+            class="fixed z-10 inset-0 overflow-y-auto" 
+            aria-labelledby="modal-title" 
+            role="dialog" 
+            aria-modal="true"
+        >
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div 
+                    x-show="showAddTemplateModal || editingTemplate"
+                    x-transition:enter="ease-out duration-300"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="ease-in duration-200"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0"
+                    class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                    @click="closeTemplateModal"
+                ></div>
 
-        <!-- Inactivity Timeout -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Inactivity Settings</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Inactivity Timeout (seconds)
-                    </label>
-                    <input 
-                        type="number" 
-                        x-model="settings.inactivityTimeout"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        min="0"
-                    >
-                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        Time before automatically ending a conversation due to inactivity
-                    </p>
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                    <div>
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                                <span x-text="editingTemplate ? 'Edit Template' : 'Add Template'"></span>
+                            </h3>
+                            <div class="mt-4">
+                                <form @submit.prevent="saveTemplate">
+                                    <!-- Name -->
+                                    <div>
+                                        <label for="templateName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Name
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="templateName" 
+                                            x-model="templateForm.name"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                            required
+                                        >
+                                    </div>
+
+                                    <!-- Trigger -->
+                                    <div class="mt-4">
+                                        <label for="templateTrigger" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Trigger (optional)
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="templateTrigger" 
+                                            x-model="templateForm.trigger"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                            placeholder="e.g., !help"
+                                        >
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="mt-4">
+                                        <label for="templateContent" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Content
+                                        </label>
+                                        <textarea 
+                                            id="templateContent" 
+                                            x-model="templateForm.content"
+                                            rows="4"
+                                            class="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                                            required
+                                        ></textarea>
+                                    </div>
+
+                                    <!-- Buttons -->
+                                    <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
+                                        <button 
+                                            type="submit"
+                                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:col-start-2 sm:text-sm"
+                                            :disabled="loading"
+                                        >
+                                            <span x-text="editingTemplate ? 'Update' : 'Add'"></span>
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:col-start-1 sm:text-sm"
+                                            @click="closeTemplateModal"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-function settings() {
-    return {
-        settings: {
-            responseDelay: {
-                min: 1000,
-                max: 3000
-            },
-            autoRead: true,
-            autoReply: true,
-            workingHours: {
-                enabled: false,
-                start: '09:00',
-                end: '17:00',
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            messageTemplates: [],
-            absenceMessage: '',
-            inactivityTimeout: 3600
-        },
-        saving: false,
-        timezones: Intl.supportedValuesOf('timeZone'),
+    <!-- Settings Manager Script -->
+    <script>
+        function settingsManager() {
+            return {
+                settings: <%- JSON.stringify(settings || {}) %>,
+                loading: false,
+                showAddTemplateModal: false,
+                editingTemplate: null,
+                templateForm: {
+                    name: '',
+                    trigger: '',
+                    content: ''
+                },
 
-        async init() {
-            await this.loadSettings();
-        },
+                async saveSettings() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/settings', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.settings)
+                        });
 
-        async loadSettings() {
-            try {
-                const response = await fetch('/api/settings');
-                const { data } = await response.json();
-                this.settings = {
-                    ...this.settings,
-                    ...data
-                };
-            } catch (error) {
-                console.error('Error loading settings:', error);
-            }
-        },
-
-        async saveSettings() {
-            this.saving = true;
-            try {
-                const response = await fetch('/api/settings', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(this.settings)
-                });
-
-                const { success, error } = await response.json();
-                
-                if (success) {
-                    // Show success notification
-                    window.dispatchEvent(new CustomEvent('notify', {
-                        detail: {
-                            message: 'Settings saved successfully',
-                            type: 'success'
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
                         }
-                    }));
-                } else {
-                    throw new Error(error);
+
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Settings saved successfully'
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error saving settings'
+                        });
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                editTemplate(template) {
+                    this.editingTemplate = template;
+                    this.templateForm = { ...template };
+                    this.showAddTemplateModal = false;
+                },
+
+                async saveTemplate() {
+                    this.loading = true;
+                    try {
+                        const url = this.editingTemplate
+                            ? `/api/settings/templates/${this.editingTemplate.id}`
+                            : '/api/settings/templates';
+
+                        const response = await fetch(url, {
+                            method: this.editingTemplate ? 'PUT' : 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.templateForm)
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        // Update templates list
+                        if (this.editingTemplate) {
+                            const index = this.settings.messageTemplates.findIndex(t => t.id === this.editingTemplate.id);
+                            if (index !== -1) {
+                                this.settings.messageTemplates[index] = data.template;
+                            }
+                        } else {
+                            this.settings.messageTemplates = this.settings.messageTemplates || [];
+                            this.settings.messageTemplates.push(data.template);
+                        }
+
+                        // Close modal and show success notification
+                        this.closeTemplateModal();
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: `Template ${this.editingTemplate ? 'updated' : 'added'} successfully`
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error saving template'
+                        });
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async deleteTemplate(template) {
+                    if (!confirm('Are you sure you want to delete this template?')) {
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/settings/templates/${template.id}`, {
+                            method: 'DELETE'
+                        });
+
+                        const data = await response.json();
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+
+                        // Remove template from list
+                        this.settings.messageTemplates = this.settings.messageTemplates.filter(t => t.id !== template.id);
+
+                        // Show success notification
+                        this.$dispatch('notify', {
+                            type: 'success',
+                            message: 'Template deleted successfully'
+                        });
+                    } catch (error) {
+                        // Show error notification
+                        this.$dispatch('notify', {
+                            type: 'error',
+                            message: error.message || 'Error deleting template'
+                        });
+                    }
+                },
+
+                closeTemplateModal() {
+                    this.showAddTemplateModal = false;
+                    this.editingTemplate = null;
+                    this.templateForm = {
+                        name: '',
+                        trigger: '',
+                        content: ''
+                    };
                 }
-            } catch (error) {
-                console.error('Error saving settings:', error);
-                // Show error notification
-                window.dispatchEvent(new CustomEvent('notify', {
-                    detail: {
-                        message: 'Error saving settings: ' + error.message,
-                        type: 'error'
-                    }
-                }));
-            } finally {
-                this.saving = false;
-            }
-        },
-
-        async resetSettings() {
-            if (!confirm('Are you sure you want to reset all settings to defaults?')) return;
-
-            try {
-                const response = await fetch('/api/settings/reset', {
-                    method: 'POST'
-                });
-                const { data } = await response.json();
-                this.settings = data;
-
-                // Show success notification
-                window.dispatchEvent(new CustomEvent('notify', {
-                    detail: {
-                        message: 'Settings reset to defaults',
-                        type: 'success'
-                    }
-                }));
-            } catch (error) {
-                console.error('Error resetting settings:', error);
-                // Show error notification
-                window.dispatchEvent(new CustomEvent('notify', {
-                    detail: {
-                        message: 'Error resetting settings',
-                        type: 'error'
-                    }
-                }));
-            }
-        },
-
-        addTemplate() {
-            this.settings.messageTemplates.push({
-                name: '',
-                content: ''
-            });
-        },
-
-        removeTemplate(index) {
-            this.settings.messageTemplates.splice(index, 1);
+            };
         }
-    }
-}
-</script>
+    </script>
+</body>
+</html>
