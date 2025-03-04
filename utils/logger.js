@@ -1,167 +1,171 @@
 const winston = require('winston');
 const path = require('path');
-const fs = require('fs');
 const config = require('../config/config');
 
-// Create logs directory if it doesn't exist
-const logsDir = config.paths.logs;
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
-}
+// Custom format for console output
+const consoleFormat = winston.format.combine(
+    winston.format.colorize(),
+    winston.format.timestamp(),
+    winston.format.printf(({ level, message, timestamp, ...meta }) => {
+        let msg = `${timestamp} ${level}: ${message}`;
+        if (Object.keys(meta).length > 0) {
+            msg += `\n${JSON.stringify(meta, null, 2)}`;
+        }
+        return msg;
+    })
+);
 
-// Define log formats
-const formats = {
-    console: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.timestamp(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-            return `${timestamp} ${level}: ${message} ${Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''}`;
-        })
-    ),
-    file: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    )
-};
+// Custom format for file output
+const fileFormat = winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+);
 
 // Create logger instance
 const logger = winston.createLogger({
     level: config.logging.level,
-    transports: [
-        // Console transport
-        new winston.transports.Console({
-            format: formats.console
-        }),
-        // Error log file transport
-        new winston.transports.File({
-            filename: path.join(logsDir, 'error.log'),
-            level: 'error',
-            format: formats.file,
-            maxsize: config.logging.maxSize,
-            maxFiles: config.logging.maxFiles
-        }),
-        // Combined log file transport
-        new winston.transports.File({
-            filename: path.join(logsDir, 'combined.log'),
-            format: formats.file,
-            maxsize: config.logging.maxSize,
-            maxFiles: config.logging.maxFiles
-        })
-    ],
-    // Handle uncaught exceptions and rejections
-    exceptionHandlers: [
-        new winston.transports.File({
-            filename: path.join(logsDir, 'exceptions.log'),
-            format: formats.file,
-            maxsize: config.logging.maxSize,
-            maxFiles: config.logging.maxFiles
-        })
-    ],
-    rejectionHandlers: [
-        new winston.transports.File({
-            filename: path.join(logsDir, 'rejections.log'),
-            format: formats.file,
-            maxsize: config.logging.maxSize,
-            maxFiles: config.logging.maxFiles
-        })
-    ]
+    format: fileFormat,
+    transports: []
 });
 
-// Create a write stream for Morgan access logs
-logger.accessLogStream = fs.createWriteStream(
-    path.join(logsDir, 'access.log'),
-    { flags: 'a' }
-);
-
-// Add request logging method
-logger.logRequest = (req, extra = {}) => {
-    const logData = {
-        method: req.method,
-        url: req.url,
-        ip: req.ip,
-        userId: req.session?.user?.id,
-        userAgent: req.headers['user-agent'],
-        ...extra
-    };
-    logger.info('Incoming request', logData);
-};
-
-// Add response logging method
-logger.logResponse = (req, res, extra = {}) => {
-    const logData = {
-        method: req.method,
-        url: req.url,
-        ip: req.ip,
-        userId: req.session?.user?.id,
-        statusCode: res.statusCode,
-        responseTime: res.get('X-Response-Time'),
-        ...extra
-    };
-    logger.info('Outgoing response', logData);
-};
-
-// Add error logging method
-logger.logError = (error, req = null, extra = {}) => {
-    const logData = {
-        message: error.message,
-        stack: error.stack,
-        ...extra
-    };
-
-    if (req) {
-        logData.method = req.method;
-        logData.url = req.url;
-        logData.ip = req.ip;
-        logData.userId = req.session?.user?.id;
-    }
-
-    logger.error('Error occurred', logData);
-};
-
-// Add security logging method
-logger.logSecurity = (event, req = null, extra = {}) => {
-    const logData = {
-        event,
-        ...extra
-    };
-
-    if (req) {
-        logData.method = req.method;
-        logData.url = req.url;
-        logData.ip = req.ip;
-        logData.userId = req.session?.user?.id;
-    }
-
-    logger.warn('Security event', logData);
-};
-
-// Add audit logging method
-logger.logAudit = (action, userId, details = {}) => {
-    const logData = {
-        action,
-        userId,
-        timestamp: new Date().toISOString(),
-        ...details
-    };
-
-    logger.info('Audit log', logData);
-};
-
-// Add performance logging method
-logger.logPerformance = (metric, value, extra = {}) => {
-    const logData = {
-        metric,
-        value,
-        timestamp: new Date().toISOString(),
-        ...extra
-    };
-
-    logger.info('Performance metric', logData);
-};
-
-// Development only: Log to console when in development
-if (config.environment !== 'production') {
-    logger.debug('Logger initialized in development mode');
+// Add console transport in non-production environments
+if (process.env.NODE_ENV !== 'production') {
+    logger.add(new winston.transports.Console({
+        format: consoleFormat
+    }));
 }
 
-module.exports = logger;
+// Add file transport if enabled
+if (config.logging.file.enabled) {
+    logger.add(new winston.transports.File({
+        filename: config.logging.file.filename,
+        maxsize: config.logging.file.maxSize,
+        maxFiles: config.logging.file.maxFiles,
+        tailable: true
+    }));
+}
+
+// Add audit log transport if enabled
+if (config.logging.audit.enabled) {
+    logger.add(new winston.transports.File({
+        filename: config.logging.audit.filename,
+        level: 'info',
+        format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.json()
+        )
+    }));
+}
+
+// Add error log transport
+logger.add(new winston.transports.File({
+    filename: path.join(path.dirname(config.logging.file.filename), 'error.log'),
+    level: 'error'
+}));
+
+// Extend logger with custom methods
+const extendedLogger = {
+    ...logger,
+
+    /**
+     * Log security-related events
+     * @param {string} message - Log message
+     * @param {Object} req - Express request object
+     * @param {Object} meta - Additional metadata
+     */
+    logSecurity(message, req, meta = {}) {
+        this.warn(message, {
+            type: 'security',
+            ip: req.ip,
+            method: req.method,
+            path: req.path,
+            ...meta
+        });
+    },
+
+    /**
+     * Log audit events
+     * @param {string} action - Action performed
+     * @param {string} userId - ID of user performing action
+     * @param {Object} meta - Additional metadata
+     */
+    logAudit(action, userId, meta = {}) {
+        this.info(action, {
+            type: 'audit',
+            userId,
+            timestamp: new Date().toISOString(),
+            ...meta
+        });
+    },
+
+    /**
+     * Log API requests
+     * @param {Object} req - Express request object
+     * @param {Object} res - Express response object
+     * @param {number} duration - Request duration in milliseconds
+     */
+    logRequest(req, res, duration) {
+        this.info('API Request', {
+            type: 'request',
+            method: req.method,
+            path: req.path,
+            status: res.statusCode,
+            duration,
+            ip: req.ip
+        });
+    },
+
+    /**
+     * Log WhatsApp events
+     * @param {string} event - Event name
+     * @param {string} numberId - WhatsApp number ID
+     * @param {Object} meta - Additional metadata
+     */
+    logWhatsApp(event, numberId, meta = {}) {
+        this.info(event, {
+            type: 'whatsapp',
+            numberId,
+            ...meta
+        });
+    },
+
+    /**
+     * Log performance metrics
+     * @param {string} metric - Metric name
+     * @param {number} value - Metric value
+     * @param {Object} meta - Additional metadata
+     */
+    logMetric(metric, value, meta = {}) {
+        this.info(metric, {
+            type: 'metric',
+            value,
+            ...meta
+        });
+    },
+
+    /**
+     * Log system events
+     * @param {string} event - Event name
+     * @param {Object} meta - Additional metadata
+     */
+    logSystem(event, meta = {}) {
+        this.info(event, {
+            type: 'system',
+            ...meta
+        });
+    }
+};
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    extendedLogger.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    extendedLogger.error('Unhandled Rejection:', { reason, promise });
+    process.exit(1);
+});
+
+module.exports = extendedLogger;
